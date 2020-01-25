@@ -14195,9 +14195,8 @@
       }
     },
     "zigbee-herdsman-converters": {
-      "version": "12.0.110",
-      "resolved": "https://registry.npmjs.org/zigbee-herdsman-converters/-/zigbee-herdsman-converters-12.0.110.tgz",
-      "integrity": "sha512-UtdhoI8yk06XovojdO+eDr4/q6oP2pTophc36q4cqTVvhlVUsur5qIsIST5795WCYuohtVPBwYYrCH95woTkkQ==",
+      "version": "github:nattgris/zigbee-herdsman-converters#bf06f42d471c5bd273400592b71ac328611ba3c7",
+      "from": "github:nattgris/zigbee-herdsman-converters#deploy-12.0.110",
       "requires": {
         "axios": "*",
         "https-proxy-agent": "*",
