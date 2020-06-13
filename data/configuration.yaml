@@ -1,5 +1,5 @@
 homeassistant: true
-permit_join: true
+permit_join: false
 mqtt:
   base_topic: zigbee
   server: 'mqtt://mosquitto'
@@ -27,3 +27,4 @@ advanced:
   log_output:
     - console
     - file
+  homeassistant_legacy_triggers: false
