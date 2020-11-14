@@ -5,6 +5,10 @@ mqtt:
   server: 'mqtt://mosquitto'
 serial:
   port: /dev/ttyACM0
+device_options:
+  debounce: 1
+  debounce_ignore:
+    - action
 devices: devices.yaml
 groups: groups.yaml
 advanced:
@@ -22,7 +26,7 @@ advanced:
     - 132
   channel: 11
   network_key: '!secret network_key'
-  log_level: debug
+  log_level: info
   log_directory: data/log/%TIMESTAMP%
   log_output:
     - console
