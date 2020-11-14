@@ -5,6 +5,10 @@ mqtt:
   server: 'mqtt://mosquitto'
 serial:
   port: /dev/ttyACM0
+frontend:
+  port: 8080
+experimental:
+  new_api: true
 device_options:
   debounce: 1
   debounce_ignore:
@@ -27,8 +31,6 @@ advanced:
   channel: 11
   network_key: '!secret network_key'
   log_level: info
-  log_directory: data/log/%TIMESTAMP%
   log_output:
     - console
-    - file
   homeassistant_legacy_triggers: false
