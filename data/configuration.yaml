@@ -9,6 +9,8 @@ frontend:
   port: 8080
 experimental:
   new_api: true
+external_converters:
+  - kitchen-light.js
 device_options:
   debounce: 1
   debounce_ignore:
