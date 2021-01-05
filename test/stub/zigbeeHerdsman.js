@@ -29,7 +29,7 @@ const clusters = {
 }
 
 class Endpoint {
-    constructor(ID, inputClusters, outputClusters, deviceIeeeAddress, binds=[], clusterValues={}) {
+    constructor(ID, inputClusters, outputClusters, deviceIeeeAddress, binds=[], clusterValues={}, configuredReportings=[]) {
         this.deviceIeeeAddress = deviceIeeeAddress;
         this.clusterValues = clusterValues;
         this.ID = ID;
@@ -45,6 +45,7 @@ class Endpoint {
         this.configureReporting = jest.fn();
         this.meta = {};
         this.binds = binds;
+        this.configuredReportings = configuredReportings;
         this.getInputClusters = () => inputClusters.map((c) => {
             return {ID: c, name: getKeyByValue(clusters, c)};
         }).filter((c) => c.name);
@@ -121,12 +122,12 @@ const returnDevices = [];
 
 const bulb_color = new Device('Router', '0x000b57fffec6a5b3', 40399, 4107, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b3', [], {lightingColorCtrl: {colorCapabilities: 254}})], true, "Mains (single phase)", "LLC020");
 const bulb_color_2 = new Device('Router', '0x000b57fffec6a5b4', 401292, 4107, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b4')], true, "Mains (single phase)", "LLC020", false, 'Philips', '2019.09', '5.127.1.26581');
-const bulb_2 =  new Device('Router', '0x000b57fffec6a5b7', 40369, 4476, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b7')], true, "Mains (single phase)", "TRADFRI bulb E27 WS opal 980lm");
+const bulb_2 =  new Device('Router', '0x000b57fffec6a5b7', 40369, 4476, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b7', [], {lightingColorCtrl: {colorCapabilities: 17}})], true, "Mains (single phase)", "TRADFRI bulb E27 WS opal 980lm");
 const TS0601_thermostat =  new Device('EndDevice', '0x0017882104a44559', 6544,4151, [new Endpoint(1, [], [], '0x0017882104a44559')], true, "Mains (single phase)", 'kud7u2l');
 
 const devices = {
     'coordinator': new Device('Coordinator', '0x00124b00120144ae', 0, 0, [new Endpoint(1, [], [])], false),
-    'bulb': new Device('Router', '0x000b57fffec6a5b2', 40369, 4476, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b2', [], {lightingColorCtrl: {colorCapabilities: 17}})], true, "Mains (single phase)", "TRADFRI bulb E27 WS opal 980lm"),
+    'bulb': new Device('Router', '0x000b57fffec6a5b2', 40369, 4476, [new Endpoint(1, [0,3,4,5,6,8,768,2821,4096], [5,25,32,4096], '0x000b57fffec6a5b2', [], {lightingColorCtrl: {colorCapabilities: 17}}, [{cluster: {name: 'genOnOff'}, attribute: {name: 'onOff'}, minimumReportInterval: 1, maximumReportInterval: 10, reportableChange: 20}])], true, "Mains (single phase)", "TRADFRI bulb E27 WS opal 980lm"),
     'bulb_color': bulb_color,
     'bulb_2': bulb_2,
     'bulb_color_2': bulb_color_2,
@@ -136,7 +137,7 @@ const devices = {
     'interviewing': new Device('EndDevice', '0x0017880104e45530', 6536, 0, [new Endpoint(1, [0], [0,3,4,6,8,5])], true, "Battery", undefined, true),
     'notInSettings': new Device('EndDevice', '0x0017880104e45519', 6537, 0, [new Endpoint(1, [0], [0,3,4,6,8,5])], true, "Battery", "lumi.sensor_switch.aq2"),
     'WXKG11LM': new Device('EndDevice', '0x0017880104e45520', 6537,4151, [new Endpoint(1, [0], [0,3,4,6,8,5])], true, "Battery", "lumi.sensor_switch.aq2"),
-    'WXKG02LM': new Device('EndDevice', '0x0017880104e45521', 6538,4151, [new Endpoint(1, [0], []), new Endpoint(2, [0], [])], true, "Battery", "lumi.sensor_86sw2.es1"),
+    'WXKG02LM_rev1': new Device('EndDevice', '0x0017880104e45521', 6538,4151, [new Endpoint(1, [0], []), new Endpoint(2, [0], [])], true, "Battery", "lumi.sensor_86sw2.es1"),
     'WSDCGQ11LM': new Device('EndDevice', '0x0017880104e45522', 6539,4151, [new Endpoint(1, [0], [])], true, "Battery", "lumi.weather"),
     'RTCGQ11LM': new Device('EndDevice', '0x0017880104e45523', 6540,4151, [new Endpoint(1, [0], [])], true, "Battery", "lumi.sensor_motion.aq2"),
     'ZNCZ02LM': new Device('Router', '0x0017880104e45524', 6540,4151, [new Endpoint(1, [0], [], '0x0017880104e45524')], true, "Mains (single phase)", "lumi.plug"),
@@ -168,6 +169,8 @@ const devices = {
     '3157100': new Device('Router', '0x0017880104e44559', 6542,4151, [new Endpoint(1, [], [], '0x0017880104e44559')], true, "Mains (single phase)", '3157100'),
     'J1': new Device('Router', '0x0017880104a44559', 6543,4151, [new Endpoint(1, [], [], '0x0017880104a44559')], true, "Mains (single phase)", 'J1 (5502)'),
     'TS0601_thermostat': TS0601_thermostat,
+    'external_converter_device': new Device('EndDevice', '0x0017880104e45511', 1114, 'external', [], false, null, 'external_converter_device' ),
+    'QS_Zigbee_D02_TRIAC_2C_LN':new Device('Router', '0x0017882194e45543', 6549,4151, [new Endpoint(1, [0], [], '0x0017882194e45543'), new Endpoint(2, [0, 6], [], '0x0017882194e45543')], true, "Mains (single phase)", 'TS110F', false, '_TYZB01_v8gtiaed'),
 }
 
 const groups = {
