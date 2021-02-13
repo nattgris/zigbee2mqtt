@@ -19,7 +19,6 @@ devices: devices.yaml
 groups: groups.yaml
 advanced:
   availability_timeout: 60
-  report: true
   pan_id: 65115
   ext_pan_id:
     - 88
