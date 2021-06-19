@@ -71,7 +71,7 @@ describe('Report', () => {
 
     beforeEach(async () => {
         data.writeDefaultConfiguration();
-        settings._reRead();
+        settings.reRead();
         data.writeEmptyState();
         settings.set(['advanced', 'report'], true);
         for (const device of Object.values(zigbeeHerdsman.devices)) {
@@ -79,7 +79,7 @@ describe('Report', () => {
             delete device.meta.reporting;
         }
 
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         mocksClear.forEach((m) => m.mockClear());
         await flushPromises();
@@ -97,7 +97,7 @@ describe('Report', () => {
         mockClear(device);
         delete device.meta.report;
         settings.set(['advanced', 'report'], false);
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         expect(device.meta.reporting).toBe(undefined);
@@ -110,7 +110,7 @@ describe('Report', () => {
         const endpoint = device.getEndpoint(1);
         settings.set(['advanced', 'report'], false);
         mockClear(device);
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         expectOnOffBrightnessColorReportDisabled(endpoint, true);
