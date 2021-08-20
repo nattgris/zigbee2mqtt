@@ -2,7 +2,7 @@ homeassistant: true
 permit_join: false
 mqtt:
   base_topic: zigbee
-  server: 'mqtt://mosquitto'
+  server: mqtt://mosquitto
 serial:
   port: /dev/ttyUSB0
 frontend:
@@ -31,7 +31,21 @@ advanced:
     - 132
   channel: 11
   network_key: '!secret network_key'
-  log_level: info
+  log_level: debug
   log_output:
     - console
   homeassistant_legacy_triggers: false
+  homeassistant_legacy_entity_attributes: false
+  legacy_api: false
+  ikea_ota_use_test_url: false
+  log_syslog:
+    app_name: Zigbee2MQTT
+    eol: /n
+    host: localhost
+    localhost: localhost
+    path: /dev/log
+    pid: process.pid
+    port: 123
+    protocol: tcp4
+    type: '5424'
+  last_seen: ISO_8601_local
