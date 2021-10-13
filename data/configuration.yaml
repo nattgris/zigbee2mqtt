@@ -9,8 +9,7 @@ frontend:
   port: 8080
 experimental:
   new_api: true
-external_converters:
-  - kitchen-light.js
+external_converters: []
 device_options:
   debounce: 1
   debounce_ignore:
@@ -31,7 +30,7 @@ advanced:
     - 132
   channel: 11
   network_key: '!secret network_key'
-  log_level: debug
+  log_level: warn
   log_output:
     - console
   homeassistant_legacy_triggers: false
@@ -49,3 +48,4 @@ advanced:
     protocol: tcp4
     type: '5424'
   last_seen: ISO_8601_local
+  cache_state_send_on_startup: false
