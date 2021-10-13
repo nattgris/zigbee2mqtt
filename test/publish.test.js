@@ -404,13 +404,14 @@ describe('Publish', () => {
     });
 
     it('Should create and publish to group which is in configuration.yaml but not in zigbee-herdsman', async () => {
-        delete zigbeeHerdsman.groups.group_2;
-        expect(Object.values(zigbeeHerdsman.groups).length).toBe(9);
-        await MQTT.events.message('zigbee2mqtt/group_2/set', stringify({state: 'ON'}));
-        await flushPromises();
+        settings.addGroup('group_12312', 12312);
         expect(Object.values(zigbeeHerdsman.groups).length).toBe(10);
-        expect(zigbeeHerdsman.groups.group_2.command).toHaveBeenCalledTimes(1);
-        expect(zigbeeHerdsman.groups.group_2.command).toHaveBeenCalledWith("genOnOff", "on", {}, {});
+        await MQTT.events.message('zigbee2mqtt/group_12312/set', stringify({state: 'ON'}));
+        await flushPromises();
+        expect(Object.values(zigbeeHerdsman.groups).length).toBe(11);
+        expect(zigbeeHerdsman.groups.group_12312.command).toHaveBeenCalledTimes(1);
+        expect(zigbeeHerdsman.groups.group_12312.command).toHaveBeenCalledWith("genOnOff", "on", {}, {});
+        delete zigbeeHerdsman.groups.group_12312;
     });
 
     it('Shouldnt publish new state when optimistic = false', async () => {
@@ -495,7 +496,17 @@ describe('Publish', () => {
         expect(endpoint3.read).toHaveBeenCalledWith('genOnOff', ['onOff']);
     });
 
-    it('Should log error when device has no such endpoint', async () => {
+    it('Should log error when device has no such endpoint (via topic)', async () => {
+        const device = zigbeeHerdsman.devices.QBKG03LM;
+        const endpoint2 = device.getEndpoint(2);
+        logger.error.mockClear();
+        await MQTT.events.message('zigbee2mqtt/0x0017880104e45542/center/get', stringify({state: ''}));
+        await flushPromises();
+        expect(logger.error).toHaveBeenCalledWith(`Device 'wall_switch_double' has no endpoint 'center'`);
+        expect(endpoint2.read).toHaveBeenCalledTimes(0);
+    });
+
+    it('Should log error when device has no such endpoint (via property)', async () => {
         const device = zigbeeHerdsman.devices.QBKG03LM;
         const endpoint2 = device.getEndpoint(2);
         const endpoint3 = device.getEndpoint(3);
@@ -1217,7 +1228,7 @@ describe('Publish', () => {
         await MQTT.events.message('zigbee2mqtt/siren/set', stringify(payload));
         await flushPromises();
         expect(endpoint.command).toHaveBeenCalledTimes(1);
-        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 22, "warningduration": 100}, {disableDefaultResponse: true});
+        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 22, "warningduration": 100, "strobedutycycle": 0, "strobelevel": 1}, {disableDefaultResponse: true});
     });
 
     it('HS2WD-E emergency warning', async () => {
@@ -1226,7 +1237,7 @@ describe('Publish', () => {
         await MQTT.events.message('zigbee2mqtt/siren/set', stringify(payload));
         await flushPromises();
         expect(endpoint.command).toHaveBeenCalledTimes(1);
-        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 51, "warningduration": 10}, {disableDefaultResponse: true});
+        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 51, "warningduration": 10, "strobedutycycle": 0, "strobelevel": 1}, {disableDefaultResponse: true});
     });
 
     it('HS2WD-E emergency without level', async () => {
@@ -1235,7 +1246,7 @@ describe('Publish', () => {
         await MQTT.events.message('zigbee2mqtt/siren/set', stringify(payload));
         await flushPromises();
         expect(endpoint.command).toHaveBeenCalledTimes(1);
-        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 49, "warningduration": 10}, {disableDefaultResponse: true});
+        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 49, "warningduration": 10, "strobedutycycle": 0, "strobelevel": 1}, {disableDefaultResponse: true});
     });
 
     it('HS2WD-E wrong payload (should use defaults)', async () => {
@@ -1244,7 +1255,7 @@ describe('Publish', () => {
         await MQTT.events.message('zigbee2mqtt/siren/set', stringify(payload));
         await flushPromises();
         expect(endpoint.command).toHaveBeenCalledTimes(1);
-        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 53, "warningduration": 10}, {disableDefaultResponse: true});
+        expect(endpoint.command).toHaveBeenCalledWith("ssIasWd", "startWarning", {"startwarninginfo": 53, "warningduration": 10, "strobedutycycle": 0, "strobelevel": 1}, {disableDefaultResponse: true});
     });
 
     it('Shouldnt do anythign when device is not supported', async () => {

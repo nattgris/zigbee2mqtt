@@ -1,5 +1,5 @@
-import data from './data';
-import utils from './utils';
+import * as data from './data';
+import * as utils from './utils';
 import objectAssignDeep from 'object-assign-deep';
 import path from 'path';
 import * as yaml from './yaml';
@@ -7,13 +7,15 @@ import Ajv from 'ajv';
 import schemaJson from './settings.schema.json';
 export const schema = schemaJson;
 
+// TODO: check all
+
 // DEPRECATED ZIGBEE2MQTT_CONFIG: https://github.com/Koenkk/zigbee2mqtt/issues/4697
 const file = process.env.ZIGBEE2MQTT_CONFIG ?? data.joinPath('configuration.yaml');
 const ajvSetting = new Ajv({allErrors: true}).addKeyword('requiresRestart').compile(schema);
 const ajvRestartRequired = new Ajv({allErrors: true})
     .addKeyword({keyword: 'requiresRestart', validate: (schema: unknown) => !schema}).compile(schema);
 
-const defaults: Settings = {
+const defaults: RecursivePartial<Settings> = {
     passlist: [],
     blocklist: [],
     // Deprecated: use block/passlist
@@ -406,7 +408,7 @@ export function get(): Settings {
     return _settingsWithDefaults;
 }
 
-export function set(path: string[], value: string | number): void {
+export function set(path: string[], value: string | number | boolean | KeyValue): void {
     /* eslint-disable-next-line */
     let settings: any = getInternalSettings();
 
@@ -445,7 +447,7 @@ export function apply(newSettings: Record<string, unknown>): boolean {
     return restartRequired;
 }
 
-export function getGroup(IDorName: string): GroupSettings {
+export function getGroup(IDorName: string | number): GroupSettings {
     const settings = get();
     const byID = settings.groups[IDorName];
     if (byID) {
@@ -574,7 +576,7 @@ export function removeDevice(IDorName: string): void {
     // Remove device from groups
     if (settings.groups) {
         const regex =
-            new RegExp(`^(${device.friendlyName}|${device.ID})(/(\\d|${utils.getEndpointNames().join('|')}))?$`);
+            new RegExp(`^(${device.friendlyName}|${device.ID})(/(\\d|${utils.endpointNames.join('|')}))?$`);
         for (const group of Object.values(settings.groups).filter((g) => g.devices)) {
             group.devices = group.devices.filter((device) => !device.match(regex));
         }
@@ -649,8 +651,8 @@ export function removeDeviceFromGroup(IDorName: string, keys: string[]): void {
     }
 }
 
-export function removeGroup(IDorName: string): void {
-    const groupID = getGroupThrowIfNotExists(IDorName).ID;
+export function removeGroup(IDorName: string | number): void {
+    const groupID = getGroupThrowIfNotExists(IDorName.toString()).ID;
     const settings = getInternalSettings();
     delete settings.groups[groupID];
     write();

@@ -15,14 +15,10 @@
         "rootDir": "lib",
         "inlineSourceMap": true,
         "resolveJsonModule": true,
-        "paths": {
-            "*": [
-                "node_modules/*",
-                "lib/types/*"
-            ]
-        },
+        "experimentalDecorators": true
     },
     "include": [
-        "lib/**/*"
+        "lib/**/*",
+        "lib/util/settings.schema.json"
     ],
 }
