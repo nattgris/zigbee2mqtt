@@ -38,7 +38,7 @@ const endpointNames = [
     'button_11', 'button_12', 'button_13', 'button_14', 'button_15',
     'button_16', 'button_17', 'button_18', 'button_19', 'button_20',
     'button_light', 'button_fan_high', 'button_fan_med', 'button_fan_low',
-    'heat', 'cool', 'water', 'meter', 'wifi',
+    'heat', 'cool', 'water', 'meter', 'wifi', 'no_occupancy_since',
 ];
 
 function capitalize(s: string): string {
@@ -245,9 +245,13 @@ function sanitizeImageParameter(parameter: string): string {
     return sanitized;
 }
 
-function isAvailabilityEnabledForDevice(device: Device, settings: Settings): boolean {
-    if (device.settings.hasOwnProperty('availability')) {
-        return !!device.settings.availability;
+function isAvailabilityEnabledForEntity(entity: Device | Group, settings: Settings): boolean {
+    if (entity.isGroup()) {
+        return !entity.membersDevices().map((d) => isAvailabilityEnabledForEntity(d, settings)).includes(false);
+    }
+
+    if (entity.options.hasOwnProperty('availability')) {
+        return !!entity.options.availability;
     }
 
     // availability_timeout = deprecated
@@ -256,11 +260,11 @@ function isAvailabilityEnabledForDevice(device: Device, settings: Settings): boo
 
     const passlist = settings.advanced.availability_passlist.concat(settings.advanced.availability_whitelist);
     if (passlist.length > 0) {
-        return passlist.includes(device.name) || passlist.includes(device.ieeeAddr);
+        return passlist.includes(entity.name) || passlist.includes(entity.ieeeAddr);
     }
 
     const blocklist = settings.advanced.availability_blacklist.concat(settings.advanced.availability_blocklist);
-    return !blocklist.includes(device.name) && !blocklist.includes(device.ieeeAddr);
+    return !blocklist.includes(entity.name) && !blocklist.includes(entity.ieeeAddr);
 }
 
 const entityIDRegex = new RegExp(`^(.+?)(?:/(${endpointNames.join('|')}|\\d+))?$`);
@@ -275,6 +279,10 @@ function isEndpoint(obj: unknown): obj is zh.Endpoint {
 
 function isZHGroup(obj: unknown): obj is zh.Group {
     return obj.constructor.name.toLowerCase() === 'group';
+}
+
+function availabilityPayload(state: 'online' | 'offline', settings: Settings): string {
+    return settings.advanced.legacy_availability_payload ? state : JSON.stringify({state});
 }
 
 const hours = (hours: number): number => 1000 * 60 * 60 * hours;
@@ -302,5 +310,5 @@ export default {
     equalsPartial, getObjectProperty, getResponse, parseJSON, loadModuleFromText, loadModuleFromFile,
     getExternalConvertersDefinitions, removeNullPropertiesFromObject, toNetworkAddressHex, toSnakeCase,
     parseEntityID, isEndpoint, isZHGroup, hours, minutes, seconds, validateFriendlyName, sleep,
-    sanitizeImageParameter, isAvailabilityEnabledForDevice, publishLastSeen,
+    sanitizeImageParameter, isAvailabilityEnabledForEntity, publishLastSeen, availabilityPayload,
 };

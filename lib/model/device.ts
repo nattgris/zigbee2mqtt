@@ -5,16 +5,20 @@ import zigbeeHerdsmanConverters from 'zigbee-herdsman-converters';
 export default class Device {
     public zh: zh.Device;
     private _definition: zhc.Definition;
+    private _definitionModelID: string;
 
     get ieeeAddr(): string {return this.zh.ieeeAddr;}
     get ID(): string {return this.zh.ieeeAddr;}
-    get settings(): DeviceSettings {return {...settings.get().device_options, ...settings.getDevice(this.ieeeAddr)};}
+    get options(): DeviceOptions {return {...settings.get().device_options, ...settings.getDevice(this.ieeeAddr)};}
     get name(): string {
-        return this.zh.type === 'Coordinator' ? 'Coordinator' : this.settings?.friendly_name || this.ieeeAddr;
+        return this.zh.type === 'Coordinator' ? 'Coordinator' : this.options?.friendly_name || this.ieeeAddr;
     }
     get definition(): zhc.Definition {
-        if (!this._definition && !this.zh.interviewing) {
+        // Some devices can change modelID, reconsider the definition in that case.
+        // https://github.com/Koenkk/zigbee-herdsman-converters/issues/3016
+        if (!this.zh.interviewing && (!this._definition || this._definitionModelID !== this.zh.modelID)) {
             this._definition = zigbeeHerdsmanConverters.findByDevice(this.zh);
+            this._definitionModelID = this.zh.modelID;
         }
         return this._definition;
     }
@@ -26,7 +30,7 @@ export default class Device {
     exposes(): zhc.DefinitionExpose[] {
         /* istanbul ignore if */
         if (typeof this.definition.exposes == 'function') {
-            return this.definition.exposes(this.zh, this.settings);
+            return this.definition.exposes(this.zh, this.options);
         } else {
             return this.definition.exposes;
         }
@@ -65,13 +69,6 @@ export default class Device {
         }
         /* istanbul ignore next */
         return name === 'default' ? null : name;
-    }
-
-    isXiaomi(): boolean {
-        const xiaomiManufacturerID = [4151, 4447];
-        /* istanbul ignore next */
-        return this.zh.modelID !== 'lumi.router' && xiaomiManufacturerID.includes(this.zh.manufacturerID) &&
-            (!this.zh.manufacturerName || !this.zh.manufacturerName.startsWith('Trust'));
     }
 
     isIkeaTradfri(): boolean {return this.zh.manufacturerID === 4476;}

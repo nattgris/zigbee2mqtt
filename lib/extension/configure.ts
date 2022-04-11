@@ -85,7 +85,7 @@ export default class Configure extends Extension {
     private async configure(device: Device, event: 'started' | 'zigbee_event' | 'reporting_disabled' | 'mqtt_message',
         force=false, thowError=false): Promise<void> {
         if (!force) {
-            if (!device.definition?.configure || device.zh.interviewing) {
+            if (!device.definition?.configure || !device.zh.interviewCompleted) {
                 return;
             }
 
@@ -112,7 +112,8 @@ export default class Configure extends Extension {
 
         logger.info(`Configuring '${device.name}'`);
         try {
-            await device.definition.configure(device.zh, this.zigbee.firstCoordinatorEndpoint(), logger);
+            await device.definition.configure(device.zh, this.zigbee.firstCoordinatorEndpoint(), logger,
+                device.options);
             logger.info(`Successfully configured '${device.name}'`);
             device.zh.meta.configured = zhc.getConfigureKey(device.definition);
             device.zh.save();

@@ -62,7 +62,12 @@ const transportsToUse: winston.transport[] = [
             winston.format.printf(/* istanbul ignore next */(info) => {
                 const {timestamp, level, message} = info;
                 const l = winstonToZ2mLevel(level as WinstonLogLevel);
-                const prefix = colorizer.colorize(l, `Zigbee2MQTT:${levelWithCompensatedLength[l]}`);
+
+                const plainPrefix = `Zigbee2MQTT:${levelWithCompensatedLength[l]}`;
+                let prefix = plainPrefix;
+                if (process.stdout.isTTY) {
+                    prefix = colorizer.colorize(l, plainPrefix);
+                }
                 return `${prefix} ${timestamp.split('.')[0]}: ${message}`;
             }),
         ),
@@ -91,8 +96,10 @@ if (settings.get().advanced.log_rotation) {
     transportFileOptions.maxsize = 10000000; // 10MB
 }
 
+let fileTransport : winston.transport;
 if (output.includes('file')) {
-    transportsToUse.push(new winston.transports.File(transportFileOptions));
+    fileTransport = new winston.transports.File(transportFileOptions);
+    transportsToUse.push(fileTransport);
 }
 
 /* istanbul ignore next */
@@ -181,6 +188,28 @@ function error(message: string): void {
     logger.error(message);
 }
 
+// Workaround for https://github.com/winstonjs/winston/issues/1629.
+// https://github.com/Koenkk/zigbee2mqtt/pull/10905
+/* istanbul ignore next */
+async function end(): Promise<void> {
+    logger.end();
+
+    await new Promise<void>((resolve) => {
+        if (!fileTransport) {
+            process.nextTick(resolve);
+        } else {
+            // @ts-ignore
+            if (fileTransport._dest) {
+                // @ts-ignore
+                fileTransport._dest.on('finish', resolve);
+            } else {
+                // @ts-ignore
+                fileTransport.on('open', () => fileTransport._dest.on('finish', resolve));
+            }
+        }
+    });
+}
+
 export default {
-    logOutput, warn, warning, error, info, debug, setLevel, getLevel, cleanup, addTransport, winston: logger,
+    logOutput, warn, warning, error, info, debug, setLevel, getLevel, cleanup, addTransport, end, winston: logger,
 };
