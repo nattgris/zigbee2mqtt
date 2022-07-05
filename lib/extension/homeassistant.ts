@@ -284,19 +284,11 @@ export default class HomeAssistant extends Extension {
 
             const preset = firstExpose.features.find((f) => f.name === 'preset');
             if (preset) {
-                discoveryEntry.discovery_payload.hold_modes = preset.values;
-                discoveryEntry.discovery_payload.hold_command_topic = true;
-                discoveryEntry.discovery_payload.hold_state_template =
+                discoveryEntry.discovery_payload.preset_modes = preset.values;
+                discoveryEntry.discovery_payload.preset_mode_command_topic = 'preset';
+                discoveryEntry.discovery_payload.preset_mode_value_template =
                     `{{ value_json.${preset.property} }}`;
-                discoveryEntry.discovery_payload.hold_state_topic = true;
-            }
-
-            const awayMode = firstExpose.features.find((f) => f.name === 'away_mode');
-            if (awayMode) {
-                discoveryEntry.discovery_payload.away_mode_command_topic = true;
-                discoveryEntry.discovery_payload.away_mode_state_topic = true;
-                discoveryEntry.discovery_payload.away_mode_state_template =
-                    `{{ value_json.${awayMode.property} }}`;
+                discoveryEntry.discovery_payload.preset_mode_state_topic = true;
             }
 
             const tempCalibration = firstExpose.features.find((f) => f.name === 'local_temperature_calibration');
@@ -413,19 +405,13 @@ export default class HomeAssistant extends Extension {
                     const closingState = motorState.values.find((s) => closingLookup.includes(s.toLowerCase()));
                     const stoppedState = motorState.values.find((s) => stoppedLookup.includes(s.toLowerCase()));
 
-                    if (openingState) {
-                        discoveryEntry.discovery_payload.state_opening = openingState;
-                    }
-                    if (closingState) {
-                        discoveryEntry.discovery_payload.state_closing = closingState;
-                    }
-                    if (stoppedState) {
-                        discoveryEntry.discovery_payload.state_stopped = stoppedState;
-                    }
-
-                    if (openingState || closingState || stoppedState) {
+                    if (openingState && closingState && stoppedState) {
                         discoveryEntry.discovery_payload.state_topic = true;
-                        discoveryEntry.discovery_payload.value_template = `{{ value_json.motor_state }}`;
+                        discoveryEntry.discovery_payload.state_opening = openingState;
+                        discoveryEntry.discovery_payload.state_closing = closingState;
+                        discoveryEntry.discovery_payload.state_stopped = stoppedState;
+                        discoveryEntry.discovery_payload.value_template = `{% if not value_json.motor_state %} ` +
+                            `${stoppedState} {% else %} {{ value_json.motor_state }} {% endif %}`;
                     }
                 } else {
                     const running = definitionExposes?.find((e) => e.type === 'binary' && e.name === 'running');
@@ -520,7 +506,7 @@ export default class HomeAssistant extends Extension {
                 discoveryEntry.discovery_payload.speed_range_max = speeds.length - 1;
                 assert(presets.length !== 0);
                 discoveryEntry.discovery_payload.preset_mode_state_topic = true;
-                discoveryEntry.discovery_payload.preset_mode_command_topic = true;
+                discoveryEntry.discovery_payload.preset_mode_command_topic = 'fan_mode';
                 discoveryEntry.discovery_payload.preset_mode_value_template =
                     `{{ value_json.${speed.property} if value_json.${speed.property} in [${presetList}]` +
                     ` else 'None' | default('None') }}`;
@@ -532,13 +518,14 @@ export default class HomeAssistant extends Extension {
             const lookup: {[s: string]: KeyValue}= {
                 battery_low: {entity_category: 'diagnostic', device_class: 'battery'},
                 button_lock: {entity_category: 'config', icon: 'mdi:lock'},
+                calibration: {entity_category: 'config', icon: 'mdi:progress-wrench'},
                 carbon_monoxide: {device_class: 'safety'},
                 card: {entity_category: 'config', icon: 'mdi:clipboard-check'},
                 child_lock: {entity_category: 'config', icon: 'mdi:account-lock'},
                 color_sync: {entity_category: 'config', icon: 'mdi:sync-circle'},
                 consumer_connected: {entity_category: 'diagnostic', device_class: 'connectivity'},
                 contact: {device_class: 'door'},
-                garage_door_contact: {device_class: 'garage'},
+                garage_door_contact: {device_class: 'garage_door', payload_on: false, payload_off: true},
                 eco_mode: {entity_category: 'config', icon: 'mdi:leaf'},
                 expose_pin: {entity_category: 'config', icon: 'mdi:pin'},
                 gas: {device_class: 'gas'},
@@ -546,6 +533,7 @@ export default class HomeAssistant extends Extension {
                 led_disabled_night: {entity_category: 'config', icon: 'mdi:led-off'},
                 led_indication: {entity_category: 'config', icon: 'mdi:led-on'},
                 legacy: {entity_category: 'config', icon: 'mdi:cog'},
+                motor_reversal: {entity_category: 'config', icon: 'mdi:arrow-left-right'},
                 moving: {device_class: 'moving'},
                 no_position_support: {entity_category: 'config', icon: 'mdi:minus-circle-outline'},
                 occupancy: {device_class: 'motion'},
@@ -554,6 +542,7 @@ export default class HomeAssistant extends Extension {
                 smoke: {device_class: 'smoke'},
                 sos: {device_class: 'safety'},
                 tamper: {device_class: 'tamper'},
+                temperature_scale: {entity_category: 'config', icon: 'mdi:temperature-celsius'},
                 test: {entity_category: 'diagnostic', icon: 'mdi:test-tube'},
                 vibration: {device_class: 'vibration'},
                 water_leak: {device_class: 'moisture'},
@@ -614,9 +603,11 @@ export default class HomeAssistant extends Extension {
                 away_preset_days: {entity_category: 'config', icon: 'mdi:timer'},
                 away_preset_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
                 battery: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
+                battery2: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
                 battery_voltage: {device_class: 'voltage', entity_category: 'diagnostic', state_class: 'measurement'},
                 boost_time: {entity_category: 'config', icon: 'mdi:timer'},
-                calibration: {entity_category: 'config'},
+                calibration: {entity_category: 'config', icon: 'mdi:wrench-clock'},
+                calibration_time: {entity_category: 'config', icon: 'mdi:wrench-clock'},
                 co2: {device_class: 'carbon_dioxide', state_class: 'measurement'},
                 comfort_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
                 cpu_temperature: {
@@ -645,6 +636,7 @@ export default class HomeAssistant extends Extension {
                 device_temperature: {
                     device_class: 'temperature', entity_category: 'diagnostic', state_class: 'measurement',
                 },
+                duration: {entity_category: 'config', icon: 'mdi:timer'},
                 eco2: {device_class: 'carbon_dioxide', state_class: 'measurement'},
                 eco_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
                 energy: {device_class: 'energy', state_class: 'total_increasing'},
@@ -652,6 +644,10 @@ export default class HomeAssistant extends Extension {
                 gas_density: {icon: 'mdi:google-circles-communities', state_class: 'measurement'},
                 hcho: {icon: 'mdi:air-filter', state_class: 'measurement'},
                 humidity: {device_class: 'humidity', state_class: 'measurement'},
+                humidity_calibration: {entity_category: 'config', icon: 'mdi:wrench-clock'},
+                humidity_max: {entity_category: 'config', icon: 'mdi:water-percent'},
+                humidity_min: {entity_category: 'config', icon: 'mdi:water-percent'},
+                illuminance_calibration: {entity_category: 'config', icon: 'mdi:wrench-clock'},
                 illuminance_lux: {device_class: 'illuminance', state_class: 'measurement'},
                 illuminance: {device_class: 'illuminance', enabled_by_default: false, state_class: 'measurement'},
                 linkquality: {
@@ -676,6 +672,7 @@ export default class HomeAssistant extends Extension {
                 precision: {entity_category: 'config', icon: 'mdi:decimal-comma-increase'},
                 pressure: {device_class: 'pressure', state_class: 'measurement'},
                 presence_timeout: {entity_category: 'config', icon: 'mdi:timer'},
+                reporting_time: {entity_category: 'config', icon: 'mdi:clock-time-one-outline'},
                 requested_brightness_level: {
                     enabled_by_default: false, entity_category: 'diagnostic', icon: 'mdi:brightness-5',
                 },
@@ -685,6 +682,9 @@ export default class HomeAssistant extends Extension {
                 smoke_density: {icon: 'mdi:google-circles-communities', state_class: 'measurement'},
                 soil_moisture: {icon: 'mdi:water-percent', state_class: 'measurement'},
                 temperature: {device_class: 'temperature', state_class: 'measurement'},
+                temperature_calibration: {entity_category: 'config', icon: 'mdi:wrench-clock'},
+                temperature_max: {entity_category: 'config', icon: 'mdi:thermometer-plus'},
+                temperature_min: {entity_category: 'config', icon: 'mdi:thermometer-minus'},
                 transition: {entity_category: 'config', icon: 'mdi:transition'},
                 voc: {device_class: 'volatile_organic_compounds', state_class: 'measurement'},
                 vibration_timeout: {entity_category: 'config', icon: 'mdi:timer'},
@@ -767,11 +767,15 @@ export default class HomeAssistant extends Extension {
                 backlight_auto_dim: {entity_category: 'config', icon: 'mdi:brightness-auto'},
                 backlight_mode: {entity_category: 'config', icon: 'mdi:lightbulb'},
                 color_power_on_behavior: {entity_category: 'config', icon: 'mdi:palette'},
+                control_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 device_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 effect: {enabled_by_default: false, icon: 'mdi:palette'},
                 force: {enabled_by_default: false, icon: 'mdi:valve'},
                 keep_time: {entity_category: 'config', icon: 'mdi:av-timer'},
                 keypad_lockout: {entity_category: 'config', icon: 'mdi:lock'},
+                load_detection_mode: {entity_category: 'config', icon: 'mdi:tune'},
+                load_dimmable: {entity_category: 'diagnostic', icon: 'mdi:chart-bell-curve'},
+                load_type: {entity_category: 'diagnostic', icon: 'mdi:led-on'},
                 melody: {entity_category: 'config', icon: 'mdi:music-note'},
                 mode_phase_control: {entity_category: 'config', icon: 'mdi:tune'},
                 mode: {entity_category: 'config', icon: 'mdi:tune'},
@@ -779,6 +783,8 @@ export default class HomeAssistant extends Extension {
                 operation_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 power_on_behavior: {entity_category: 'config', icon: 'mdi:power-settings'},
                 power_outage_memory: {entity_category: 'config', icon: 'mdi:power-settings'},
+                power_supply_mode: {entity_category: 'diagnostic', icon: 'mdi:power-settings'},
+                power_type: {entity_category: 'diagnostic', icon: 'mdi:lightning-bolt-circle'},
                 sensitivity: {entity_category: 'config', icon: 'mdi:tune'},
                 sensors_type: {entity_category: 'config', icon: 'mdi:tune'},
                 sound_volume: {entity_category: 'config', icon: 'mdi:volume-high'},
@@ -919,7 +925,7 @@ export default class HomeAssistant extends Extension {
         }
     }
 
-    @bind onEntityRenamed(data: eventdata.EntityRenamed): void {
+    @bind async onEntityRenamed(data: eventdata.EntityRenamed): Promise<void> {
         logger.debug(`Refreshing Home Assistant discovery topic for '${data.entity.name}'`);
 
         // Clear before rename so Home Assistant uses new friendly_name
@@ -929,6 +935,10 @@ export default class HomeAssistant extends Extension {
                 const topic = this.getDiscoveryTopic(config, data.entity);
                 this.mqtt.publish(topic, null, {retain: true, qos: 0}, this.discoveryTopic, false, false);
             }
+
+            // Make sure Home Assistant deletes the old entity first otherwise another one (_2) is created
+            // https://github.com/Koenkk/zigbee2mqtt/issues/12610
+            await utils.sleep(2);
         }
 
         this.discover(data.entity, true);
@@ -1169,22 +1179,6 @@ export default class HomeAssistant extends Extension {
                 payload.mode_command_topic = `${baseTopic}/${commandTopicPrefix}set/system_mode`;
             }
 
-            if (payload.hold_command_topic) {
-                payload.hold_command_topic = `${baseTopic}/${commandTopicPrefix}set/preset`;
-            }
-
-            if (payload.hold_state_topic) {
-                payload.hold_state_topic = stateTopic;
-            }
-
-            if (payload.away_mode_state_topic) {
-                payload.away_mode_state_topic = stateTopic;
-            }
-
-            if (payload.away_mode_command_topic) {
-                payload.away_mode_command_topic = `${baseTopic}/${commandTopicPrefix}set/away_mode`;
-            }
-
             if (payload.current_temperature_topic) {
                 payload.current_temperature_topic = stateTopic;
             }
@@ -1237,7 +1231,8 @@ export default class HomeAssistant extends Extension {
             }
 
             if (payload.preset_mode_command_topic) {
-                payload.preset_mode_command_topic = `${baseTopic}/${commandTopicPrefix}set/fan_mode`;
+                payload.preset_mode_command_topic = `${baseTopic}/${commandTopicPrefix}set/` +
+                    payload.preset_mode_command_topic;
             }
 
             if (payload.action_topic) {
@@ -1339,9 +1334,9 @@ export default class HomeAssistant extends Extension {
             data.message.toLowerCase() === 'online') {
             const timer = setTimeout(async () => {
                 // Publish all device states.
-                for (const device of this.zigbee.devices(false)) {
-                    if (this.state.exists(device)) {
-                        this.publishEntityState(device, this.state.get(device));
+                for (const entity of [...this.zigbee.devices(false), ...this.zigbee.groups()]) {
+                    if (this.state.exists(entity)) {
+                        this.publishEntityState(entity, this.state.get(entity));
                     }
                 }
 

@@ -752,9 +752,6 @@ describe('HomeAssistant extension', () => {
                     "topic":"zigbee2mqtt/bridge/state"
                 }
             ],
-            "away_mode_command_topic":"zigbee2mqtt/TS0601_thermostat/set/away_mode",
-            "away_mode_state_template":"{{ value_json.away_mode }}",
-            "away_mode_state_topic":"zigbee2mqtt/TS0601_thermostat",
             "current_temperature_template":"{{ value_json.local_temperature }}",
             "current_temperature_topic":"zigbee2mqtt/TS0601_thermostat",
             "device":{
@@ -766,8 +763,8 @@ describe('HomeAssistant extension', () => {
                 "name":"TS0601_thermostat",
                 "sw_version":null
             },
-            "hold_command_topic":"zigbee2mqtt/TS0601_thermostat/set/preset",
-            "hold_modes":[
+            "preset_mode_command_topic":"zigbee2mqtt/TS0601_thermostat/set/preset",
+            "preset_modes":[
                 "schedule",
                 "manual",
                 "boost",
@@ -775,8 +772,8 @@ describe('HomeAssistant extension', () => {
                 "comfort",
                 "eco"
             ],
-            "hold_state_template":"{{ value_json.preset }}",
-            "hold_state_topic":"zigbee2mqtt/TS0601_thermostat",
+            "preset_mode_value_template":"{{ value_json.preset }}",
+            "preset_mode_state_topic":"zigbee2mqtt/TS0601_thermostat",
             "json_attributes_topic":"zigbee2mqtt/TS0601_thermostat",
             "max_temp":"35",
             "min_temp":"5",
@@ -1042,6 +1039,12 @@ describe('HomeAssistant extension', () => {
             { retain: true, qos: 0 },
             expect.any(Function)
         );
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'zigbee2mqtt/group_1',
+            stringify({"state":'ON'}),
+            { retain: false, qos: 0 },
+            expect.any(Function)
+        );
     });
 
     it('Should send all status when home assistant comes online', async () => {
@@ -1178,6 +1181,8 @@ describe('HomeAssistant extension', () => {
         MQTT.publish.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/request/device/rename', stringify({"from": "weather_sensor", "to": "weather_sensor_renamed","homeassistant_rename":true}));
         await flushPromises();
+        jest.runOnlyPendingTimers();
+        await flushPromises();
 
         const payload = {
             'unit_of_measurement': '°C',
@@ -1239,6 +1244,8 @@ describe('HomeAssistant extension', () => {
     it('Should refresh discovery when group is renamed', async () => {
         MQTT.publish.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/request/group/rename', stringify({"from": "ha_discovery_group", "to": "ha_discovery_group_new","homeassistant_rename":true}));
+        await flushPromises();
+        jest.runOnlyPendingTimers();
         await flushPromises();
 
         const payload = {
@@ -1354,7 +1361,7 @@ describe('HomeAssistant extension', () => {
 
     it('Should discover trigger when click is published', async () => {
         const discovered = MQTT.publish.mock.calls.filter((c) => c[0].includes('0x0017880104e45520')).map((c) => c[0]);
-        expect(discovered.length).toBe(5);
+        expect(discovered.length).toBe(7);
         expect(discovered).toContain('homeassistant/sensor/0x0017880104e45520/click/config');
         expect(discovered).toContain('homeassistant/sensor/0x0017880104e45520/action/config');
 
@@ -1429,21 +1436,21 @@ describe('HomeAssistant extension', () => {
 
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/button',
-            stringify({action: "single", click: "single", battery: null, linkquality: null, voltage: null}),
+            stringify({action: "single", click: "single", battery: null, linkquality: null, voltage: null, power_outage_count: null, device_temperature: null}),
             { retain: false, qos: 0 },
             expect.any(Function),
         );
 
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/button',
-            stringify({action: "", battery: null, linkquality: null, voltage: null, click: null}),
+            stringify({action: "", battery: null, linkquality: null, voltage: null, click: null, power_outage_count: null, device_temperature: null}),
             { retain: false, qos: 0 },
             expect.any(Function),
         );
 
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/button',
-            stringify({click: "", action: null, battery: null, linkquality: null, voltage: null}),
+            stringify({click: "", action: null, battery: null, linkquality: null, voltage: null, power_outage_count: null, device_temperature: null}),
             { retain: false, qos: 0 },
             expect.any(Function),
         );
@@ -1530,7 +1537,7 @@ describe('HomeAssistant extension', () => {
         await resetExtension();
 
         const discovered = MQTT.publish.mock.calls.filter((c) => c[0].includes('0x0017880104e45520')).map((c) => c[0]);
-        expect(discovered.length).toBe(4);
+        expect(discovered.length).toBe(6);
         expect(discovered).toContain('homeassistant/sensor/0x0017880104e45520/action/config');
         expect(discovered).toContain('homeassistant/sensor/0x0017880104e45520/battery/config');
         expect(discovered).toContain('homeassistant/sensor/0x0017880104e45520/linkquality/config');
@@ -1541,7 +1548,7 @@ describe('HomeAssistant extension', () => {
         await resetExtension();
 
         const discovered = MQTT.publish.mock.calls.filter((c) => c[0].includes('0x0017880104e45520')).map((c) => c[0]);
-        expect(discovered.length).toBe(3);
+        expect(discovered.length).toBe(5);
         expect(discovered).not.toContain('homeassistant/sensor/0x0017880104e45520/click/config');
         expect(discovered).not.toContain('homeassistant/sensor/0x0017880104e45520/action/config');
 
@@ -1586,7 +1593,7 @@ describe('HomeAssistant extension', () => {
 
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/button',
-            stringify({action: "single", "battery":null,"linkquality":null,"voltage":null}),
+            stringify({action: "single", "battery":null,"linkquality":null,"voltage":null, "power_outage_count": null, "device_temperature": null}),
             { retain: false, qos: 0 },
             expect.any(Function),
         );
@@ -1623,10 +1630,10 @@ describe('HomeAssistant extension', () => {
         await flushPromises();
         expect(MQTT.publish).toHaveBeenCalledTimes(4);
         expect(MQTT.publish.mock.calls[0][0]).toStrictEqual('zigbee2mqtt/button');
-        expect(JSON.parse(MQTT.publish.mock.calls[0][1])).toStrictEqual({action: 'single', click: null, battery: null, linkquality: null, voltage: null});
+        expect(JSON.parse(MQTT.publish.mock.calls[0][1])).toStrictEqual({action: 'single', click: null, battery: null, linkquality: null, voltage: null, power_outage_count: null, device_temperature: null});
         expect(MQTT.publish.mock.calls[0][2]).toStrictEqual({"qos": 0, "retain": false});
         expect(MQTT.publish.mock.calls[1][0]).toStrictEqual('zigbee2mqtt/button');
-        expect(JSON.parse(MQTT.publish.mock.calls[1][1])).toStrictEqual({action: '', click: null, battery: null, linkquality: null, voltage: null});
+        expect(JSON.parse(MQTT.publish.mock.calls[1][1])).toStrictEqual({action: '', click: null, battery: null, linkquality: null, voltage: null, power_outage_count: null, device_temperature: null});
         expect(MQTT.publish.mock.calls[1][2]).toStrictEqual({"qos": 0, "retain": false});
         expect(MQTT.publish.mock.calls[2][0]).toStrictEqual('homeassistant/device_automation/0x0017880104e45520/action_single/config');
         expect(MQTT.publish.mock.calls[3][0]).toStrictEqual('zigbee2mqtt/button/action');
