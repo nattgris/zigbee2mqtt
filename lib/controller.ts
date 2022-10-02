@@ -144,8 +144,7 @@ class Controller {
         try {
             await this.mqtt.connect();
         } catch (error) {
-            logger.error(`MQTT failed to connect: ${error.message}`);
-            logger.error('Exiting...');
+            logger.error(`MQTT failed to connect, exiting...`);
             await this.zigbee.stop();
             await this.exit(1);
         }
@@ -157,7 +156,7 @@ class Controller {
         if (settings.get().advanced.cache_state_send_on_startup && settings.get().advanced.cache_state) {
             for (const entity of [...devices, ...this.zigbee.groups()]) {
                 if (this.state.exists(entity)) {
-                    this.publishEntityState(entity, this.state.get(entity));
+                    this.publishEntityState(entity, this.state.get(entity), 'publishCached');
                 }
             }
         }
@@ -265,10 +264,8 @@ class Controller {
             extension.adjustMessageBeforePublish?.(entity, message);
         }
 
-        // filter mqtt message attributes
-        if (entity.options.filtered_attributes) {
-            entity.options.filtered_attributes.forEach((a) => delete message[a]);
-        }
+        // Filter mqtt message attributes
+        utils.filterProperties(entity.options.filtered_attributes, message);
 
         if (Object.entries(message).length) {
             const output = settings.get().advanced.output;

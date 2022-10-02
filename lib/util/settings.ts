@@ -309,6 +309,7 @@ export function validate(): string[] {
 
 function read(): Settings {
     const s = yaml.read(file) as Settings;
+    applyEnvironmentVariables(s);
 
     // Read !secret MQTT username and password if set
     // eslint-disable-next-line
@@ -381,7 +382,11 @@ function applyEnvironmentVariables(settings: Partial<Settings>): void {
                         }, settings);
 
                         if (type.indexOf('object') >= 0 || type.indexOf('array') >= 0) {
-                            setting[key] = JSON.parse(process.env[envVariableName]);
+                            try {
+                                setting[key] = JSON.parse(process.env[envVariableName]);
+                            } catch (error) {
+                                setting[key] = process.env[envVariableName];
+                            }
                         } else if (type.indexOf('number') >= 0) {
                             /* eslint-disable-line */ // @ts-ignore
                             setting[key] = process.env[envVariableName] * 1;
@@ -412,7 +417,6 @@ function applyEnvironmentVariables(settings: Partial<Settings>): void {
 function getInternalSettings(): Partial<Settings> {
     if (!_settings) {
         _settings = read();
-        applyEnvironmentVariables(_settings);
     }
 
     return _settings;
