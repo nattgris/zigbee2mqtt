@@ -77,7 +77,7 @@ async function getZigbee2MQTTVersion(includeCommitHash=true): Promise<{commitHas
 }
 
 async function getDependencyVersion(depend: string): Promise<{version: string}> {
-    const packageJSON = await import(path.join(__dirname, '..', '..', 'node_modules', depend, 'package.json'));
+    const packageJSON = await import(path.join(require.resolve(depend), '..', '..', 'package.json'));
     const version = packageJSON.version;
     return {version};
 }
@@ -314,6 +314,14 @@ function isEndpoint(obj: unknown): obj is zh.Endpoint {
     return obj.constructor.name.toLowerCase() === 'endpoint';
 }
 
+function flatten<Type>(arr: Type[][]): Type[] {
+    return [].concat(...arr);
+}
+
+function arrayUnique<Type>(arr: Type[]): Type[] {
+    return [...new Set(arr)];
+}
+
 function isZHGroup(obj: unknown): obj is zh.Group {
     return obj.constructor.name.toLowerCase() === 'group';
 }
@@ -351,11 +359,15 @@ function filterProperties(filter: string[], data: KeyValue): void {
     }
 }
 
+function clone(obj: KeyValue): KeyValue {
+    return JSON.parse(JSON.stringify(obj));
+}
+
 export default {
     endpointNames, capitalize, getZigbee2MQTTVersion, getDependencyVersion, formatDate, objectHasProperties,
     equalsPartial, getObjectProperty, getResponse, parseJSON, loadModuleFromText, loadModuleFromFile,
     getExternalConvertersDefinitions, removeNullPropertiesFromObject, toNetworkAddressHex, toSnakeCase,
     parseEntityID, isEndpoint, isZHGroup, hours, minutes, seconds, validateFriendlyName, sleep,
     sanitizeImageParameter, isAvailabilityEnabledForEntity, publishLastSeen, availabilityPayload,
-    getAllFiles, filterProperties,
+    getAllFiles, filterProperties, flatten, arrayUnique, clone,
 };

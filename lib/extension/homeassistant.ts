@@ -111,7 +111,7 @@ export default class HomeAssistant extends Extension {
     }
 
     private exposeToConfig(exposes: zhc.DefinitionExpose[], entityType: 'device' | 'group',
-        definition?: zhc.Definition, definitionExposes?: zhc.DefinitionExpose[]): DiscoveryEntry[] {
+        allExposes: zhc.DefinitionExpose[], definition?: zhc.Definition): DiscoveryEntry[] {
         // For groups an array of exposes (of the same type) is passed, this is to determine e.g. what features
         // to use for a bulb (e.g. color_xy/color_temp)
         assert(entityType === 'group' || exposes.length === 1, 'Multiple exposes for device not allowed');
@@ -171,10 +171,11 @@ export default class HomeAssistant extends Extension {
                 discoveryEntry.discovery_payload.min_mireds = min;
             }
 
-            const effect = definitionExposes?.find((e) => e.type === 'enum' && e.name === 'effect');
-            if (effect) {
+            const effects = utils.arrayUnique(utils.flatten(
+                allExposes.filter((e) => e.type === 'enum' && e.name === 'effect').map((e) => e.values)));
+            if (effects.length) {
                 discoveryEntry.discovery_payload.effect = true;
-                discoveryEntry.discovery_payload.effect_list = effect.values;
+                discoveryEntry.discovery_payload.effect_list = effects;
             }
 
             discoveryEntries.push(discoveryEntry);
@@ -320,6 +321,9 @@ export default class HomeAssistant extends Extension {
 
                 if (tempCalibration.value_min != null) discoveryEntry.discovery_payload.min = tempCalibration.value_min;
                 if (tempCalibration.value_max != null) discoveryEntry.discovery_payload.max = tempCalibration.value_max;
+                if (tempCalibration.value_step != null) {
+                    discoveryEntry.discovery_payload.step = tempCalibration.value_step;
+                }
                 discoveryEntries.push(discoveryEntry);
             }
 
@@ -386,9 +390,9 @@ export default class HomeAssistant extends Extension {
                 ?.features.find((f) => f.name === 'position');
             const tilt = exposes.find((expose) => expose.features.find((e) => e.name === 'tilt'))
                 ?.features.find((f) => f.name === 'tilt');
-            const motorState = definitionExposes?.find((e) => e.type === 'enum' && e.name === 'motor_state' &&
+            const motorState = allExposes?.find((e) => e.type === 'enum' && e.name === 'motor_state' &&
                 e.access === ACCESS_STATE);
-            const running = definitionExposes?.find((e) => e.type === 'binary' && e.name === 'running');
+            const running = allExposes?.find((e) => e.type === 'binary' && e.name === 'running');
 
             const discoveryEntry: DiscoveryEntry = {
                 type: 'cover',
@@ -550,8 +554,10 @@ export default class HomeAssistant extends Extension {
                 tamper: {device_class: 'tamper'},
                 temperature_scale: {entity_category: 'config', icon: 'mdi:temperature-celsius'},
                 test: {entity_category: 'diagnostic', icon: 'mdi:test-tube'},
+                valve_state: {device_class: 'opening'},
                 vibration: {device_class: 'vibration'},
                 water_leak: {device_class: 'moisture'},
+                window: {device_class: 'window'},
             };
 
             /**
@@ -611,6 +617,8 @@ export default class HomeAssistant extends Extension {
                 battery: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
                 battery2: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
                 battery_voltage: {device_class: 'voltage', entity_category: 'diagnostic', state_class: 'measurement'},
+                boost_heating_countdown: {device_class: 'duration'},
+                boost_heating_countdown_time_set: {entity_category: 'config', icon: 'mdi:timer'},
                 boost_time: {entity_category: 'config', icon: 'mdi:timer'},
                 calibration: {entity_category: 'config', icon: 'mdi:wrench-clock'},
                 calibration_time: {entity_category: 'config', icon: 'mdi:wrench-clock'},
@@ -663,9 +671,10 @@ export default class HomeAssistant extends Extension {
                     state_class: 'measurement',
                 },
                 local_temperature: {device_class: 'temperature', state_class: 'measurement'},
-                max_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
-                max_temperature_limit: {entity_category: 'config', icon: 'mdi:thermometer'},
-                min_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
+                max_temperature: {entity_category: 'config', icon: 'mdi:thermometer-high'},
+                max_temperature_limit: {entity_category: 'config', icon: 'mdi:thermometer-high'},
+                min_temperature_limit: {entity_category: 'config', icon: 'mdi:thermometer-low'},
+                min_temperature: {entity_category: 'config', icon: 'mdi:thermometer-low'},
                 measurement_poll_interval: {entity_category: 'config', icon: 'mdi:clock-out'},
                 occupancy_timeout: {entity_category: 'config', icon: 'mdi:timer'},
                 pm10: {device_class: 'pm10', state_class: 'measurement'},
@@ -756,6 +765,7 @@ export default class HomeAssistant extends Extension {
                         command_topic_prefix: endpoint,
                         command_topic_postfix: firstExpose.property,
                         ...(firstExpose.unit && {unit_of_measurement: firstExpose.unit}),
+                        ...(firstExpose.value_step && {step: firstExpose.value_step}),
                         ...lookup[firstExpose.name],
                     },
                 };
@@ -802,6 +812,7 @@ export default class HomeAssistant extends Extension {
                 sound_volume: {entity_category: 'config', icon: 'mdi:volume-high'},
                 status: {icon: 'mdi:state-machine'},
                 switch_type: {entity_category: 'config', icon: 'mdi:tune'},
+                temperature_sensor_select: {entity_category: 'config', icon: 'mdi:home-thermometer'},
                 thermostat_unit: {entity_category: 'config', icon: 'mdi:thermometer'},
                 volume: {entity_category: 'config', icon: 'mdi: volume-high'},
                 week: {entity_category: 'config', icon: 'mdi:calendar-clock'},
@@ -844,10 +855,11 @@ export default class HomeAssistant extends Extension {
                     },
                 });
             }
-        } else if (firstExpose.type === 'text' || firstExpose.type === 'composite') {
+        } else if (firstExpose.type === 'text' || firstExpose.type === 'composite' || firstExpose.type === 'list') {
             if (firstExpose.access & ACCESS_STATE) {
                 const lookup: {[s: string]: KeyValue} = {
                     action: {icon: 'mdi:gesture-double-tap'},
+                    programming_mode: {icon: 'mdi:calendar-clock'},
                 };
 
                 const discoveryEntry: DiscoveryEntry = {
@@ -980,7 +992,7 @@ export default class HomeAssistant extends Extension {
         if (isDevice) {
             const exposes = entity.exposes(); // avoid calling it hundred of times/s
             for (const expose of exposes) {
-                configs.push(...this.exposeToConfig([expose], 'device', entity.definition, exposes));
+                configs.push(...this.exposeToConfig([expose], 'device', exposes, entity.definition));
             }
 
             for (const mapping of legacyMapping) {
@@ -997,10 +1009,13 @@ export default class HomeAssistant extends Extension {
             }
         } else { // group
             const exposesByType: {[s: string]: zhc.DefinitionExpose[]} = {};
+            const allExposes: zhc.DefinitionExpose[] = [];
 
             entity.zh.members.map((e) => this.zigbee.resolveEntity(e.getDevice()) as Device)
                 .filter((d) => d.definition).forEach((device) => {
-                    for (const expose of device.exposes().filter((e) => groupSupportedTypes.includes(e.type))) {
+                    const exposes = device.exposes();
+                    allExposes.push(...exposes);
+                    for (const expose of exposes.filter((e) => groupSupportedTypes.includes(e.type))) {
                         let key = expose.type;
                         if (['switch', 'lock', 'cover'].includes(expose.type) && expose.endpoint) {
                             // A device can have multiple of these types which have to discovered seperately.
@@ -1015,7 +1030,7 @@ export default class HomeAssistant extends Extension {
                 });
 
             configs = [].concat(...Object.values(exposesByType)
-                .map((exposes) => this.exposeToConfig(exposes, 'group')));
+                .map((exposes) => this.exposeToConfig(exposes, 'group', allExposes)));
         }
 
         if (isDevice && settings.get().advanced.last_seen !== 'disable') {
@@ -1061,12 +1076,29 @@ export default class HomeAssistant extends Extension {
                     payload_on: true,
                     payload_off: false,
                     value_template: `{{ value_json['update']['state'] == "available" }}`,
-                    enabled_by_default: true,
+                    enabled_by_default: false,
                     device_class: 'update',
                     entity_category: 'diagnostic',
                 },
             };
             configs.push(updateAvailableSensor);
+            const updateSensor: DiscoveryEntry = {
+                type: 'update',
+                object_id: 'update',
+                mockProperties: [{property: 'update', value: {state: null}}],
+                discovery_payload: {
+                    entity_picture: 'https://github.com/Koenkk/zigbee2mqtt/raw/master/images/logo.png',
+                    latest_version_topic: true,
+                    state_topic: true,
+                    device_class: 'firmware',
+                    command_topic: `${settings.get().mqtt.base_topic}/bridge/request/device/ota_update/update`,
+                    payload_install: `{"id": "${entity.ieeeAddr}"}`,
+                    value_template: `{{ value_json['update']['installed_version'] }}`,
+                    latest_version_template: `{% if value_json['update']['state'] == "available" %}{{ 'newer' }}` +
+                        `{% else %}{{ value_json['update']['installed_version'] }}{% endif %}`,
+                },
+            };
+            configs.push(updateSensor);
         }
 
         if (isDevice && entity.options.hasOwnProperty('legacy') && !entity.options.legacy) {
@@ -1178,7 +1210,7 @@ export default class HomeAssistant extends Extension {
             delete payload.command_topic_postfix;
             const commandTopic = `${baseTopic}/${commandTopicPrefix}set${commandTopicPostfix}`;
 
-            if (payload.command_topic) {
+            if (payload.command_topic && typeof payload.command_topic !== 'string') {
                 payload.command_topic = commandTopic;
             }
 
@@ -1231,6 +1263,10 @@ export default class HomeAssistant extends Extension {
 
             if (payload.fan_mode_state_topic) {
                 payload.fan_mode_state_topic = stateTopic;
+            }
+
+            if (payload.latest_version_topic) {
+                payload.latest_version_topic = stateTopic;
             }
 
             if (payload.fan_mode_command_topic) {
@@ -1423,6 +1459,10 @@ export default class HomeAssistant extends Extension {
             if (message.color.hasOwnProperty('saturation')) {
                 message.color.s = message.color.saturation;
             }
+        }
+
+        if (entity.isDevice() && entity.definition?.ota && message.hasOwnProperty('update')) {
+            message['update']['installed_version'] = entity.zh.softwareBuildID || 'unknown';
         }
     }
 

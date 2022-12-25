@@ -1,4 +1,4 @@
-FROM node:16-alpine3.15 as base
+FROM node:18-alpine3.16 as base
 
 WORKDIR /app
 RUN apk add --no-cache tzdata eudev tini
@@ -27,6 +27,8 @@ RUN mkdir /app/data
 
 ARG COMMIT
 RUN echo "$COMMIT" > dist/.hash
+
+ENV NODE_ENV production
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD [ "/sbin/tini", "--", "node", "index.js"]
