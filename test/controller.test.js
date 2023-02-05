@@ -147,7 +147,6 @@ describe('Controller', () => {
         logger.error.mockClear();
         controller.mqtt.client.reconnecting = true;
         jest.advanceTimersByTime(11 * 1000);
-        await flushPromises();
         expect(logger.error).toHaveBeenCalledWith("Not connected to MQTT server!");
         controller.mqtt.client.reconnecting = false;
     });
@@ -718,5 +717,14 @@ describe('Controller', () => {
         await zigbeeHerdsman.events.message(payload);
         await flushPromises();
         expect(logger.debug).toHaveBeenCalledWith(`Received Zigbee message from 'Coordinator', type 'attributeReport', cluster 'genBasic', data '{"modelId":null}' from endpoint 1, ignoring since it is from coordinator`);
+    });
+
+    it('Should remove state of removed device when stopped', async () => {
+        await controller.start();
+        const device = controller.zigbee.resolveEntity('bulb');
+        expect(controller.state.state[device.ieeeAddr]).toStrictEqual({"brightness":50,"color_temp":370,"linkquality":99,"state":"ON"});
+        device.zh.isDeleted = true;
+        await controller.stop();
+        expect(controller.state.state[device.ieeeAddr]).toStrictEqual(undefined);
     });
 });
