@@ -1386,35 +1386,6 @@ export default class HomeAssistant extends Extension {
         }
 
         if (isDevice && entity.definition.ota) {
-            const updateStateSensor: DiscoveryEntry = {
-                type: 'sensor',
-                object_id: 'update_state',
-                mockProperties: [], // update is mocked below with updateSensor
-                discovery_payload: {
-                    name: 'Update state',
-                    icon: 'mdi:update',
-                    value_template: `{{ value_json['update']['state'] }}`,
-                    enabled_by_default: false,
-                    entity_category: 'diagnostic',
-                },
-            };
-
-            configs.push(updateStateSensor);
-            const updateAvailableSensor: DiscoveryEntry = {
-                type: 'binary_sensor',
-                object_id: 'update_available',
-                mockProperties: [{property: 'update_available', value: null}],
-                discovery_payload: {
-                    name: null,
-                    payload_on: true,
-                    payload_off: false,
-                    value_template: `{{ value_json['update']['state'] == "available" }}`,
-                    enabled_by_default: false,
-                    device_class: 'update',
-                    entity_category: 'diagnostic',
-                },
-            };
-            configs.push(updateAvailableSensor);
             const updateSensor: DiscoveryEntry = {
                 type: 'update',
                 object_id: 'update',
