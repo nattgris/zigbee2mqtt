@@ -211,7 +211,7 @@ function write(): void {
     // Read settings to check if we have to split devices/groups into separate file.
     const actual = yaml.read(file);
 
-    // In case the setting is defined in a separte file (e.g. !secret network_key) update it there.
+    // In case the setting is defined in a separate file (e.g. !secret network_key) update it there.
     for (const path of [
         ['mqtt', 'server'],
         ['mqtt', 'user'],
@@ -230,7 +230,7 @@ function write(): void {
 
     // Write devices/groups to separate file if required.
     const writeDevicesOrGroups = (type: 'devices' | 'groups'): void => {
-        if (typeof actual[type] === 'string' || Array.isArray(actual[type])) {
+        if (typeof actual[type] === 'string' || (Array.isArray(actual[type]) && actual[type].length > 0)) {
             const fileToWrite = Array.isArray(actual[type]) ? actual[type][0] : actual[type];
             const content = objectAssignDeep({}, settings[type]);
 
@@ -330,7 +330,7 @@ function read(): Settings {
 
     // Read !secret MQTT username and password if set
     // eslint-disable-next-line
-    const interpetValue = (value: any): any => {
+    const interpretValue = (value: any): any => {
         const ref = parseValueRef(value);
         if (ref) {
             return yaml.read(data.joinPath(ref.filename))[ref.key];
@@ -340,28 +340,28 @@ function read(): Settings {
     };
 
     if (s.mqtt?.user) {
-        s.mqtt.user = interpetValue(s.mqtt.user);
+        s.mqtt.user = interpretValue(s.mqtt.user);
     }
 
     if (s.mqtt?.password) {
-        s.mqtt.password = interpetValue(s.mqtt.password);
+        s.mqtt.password = interpretValue(s.mqtt.password);
     }
 
     if (s.mqtt?.server) {
-        s.mqtt.server = interpetValue(s.mqtt.server);
+        s.mqtt.server = interpretValue(s.mqtt.server);
     }
 
     if (s.advanced?.network_key) {
-        s.advanced.network_key = interpetValue(s.advanced.network_key);
+        s.advanced.network_key = interpretValue(s.advanced.network_key);
     }
 
     if (s.frontend?.auth_token) {
-        s.frontend.auth_token = interpetValue(s.frontend.auth_token);
+        s.frontend.auth_token = interpretValue(s.frontend.auth_token);
     }
 
     // Read devices/groups configuration from separate file if specified.
     const readDevicesOrGroups = (type: 'devices' | 'groups'): void => {
-        if (typeof s[type] === 'string' || Array.isArray(s[type])) {
+        if (typeof s[type] === 'string' || (Array.isArray(s[type]) && Array(s[type]).length > 0)) {
             /* eslint-disable-line */ // @ts-ignore
             const files: string[] = Array.isArray(s[type]) ? s[type] : [s[type]];
             s[type] = {};
@@ -472,7 +472,7 @@ export function apply(newSettings: Record<string, unknown>): boolean {
         throw new Error(`${error.instancePath.substring(1)} ${error.message}`);
     }
 
-    getInternalSettings(); // Ensure _settings is intialized.
+    getInternalSettings(); // Ensure _settings is initialized.
     /* eslint-disable-line */ // @ts-ignore
     _settings = objectAssignDeep.noMutate(_settings, newSettings);
     write();

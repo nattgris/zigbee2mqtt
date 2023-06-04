@@ -104,8 +104,12 @@ describe('HomeAssistant extension', () => {
                 "breathe",
                 "okay",
                 "channel_change",
+                "candle",
+                "fireplace",
+                "colorloop",
                 "finish_effect",
-                "stop_effect"
+                "stop_effect",
+                "stop_hue_effect",
             ],
             "unique_id":"9_light_zigbee2mqtt"
         };
@@ -825,6 +829,7 @@ describe('HomeAssistant extension', () => {
             value_template: `{{ value_json.state }}`,
             state_open: 'OPEN',
             state_closed: 'CLOSE',
+            state_stopped: 'STOP',
             json_attributes_topic: 'zigbee2mqtt/smart vent',
             name: 'smart vent',
             unique_id: '0x0017880104e45551_cover_zigbee2mqtt',
@@ -862,6 +867,7 @@ describe('HomeAssistant extension', () => {
             "position_topic": "zigbee2mqtt/zigfred_plus/l6",
             "set_position_template": "{ \"position_l6\": {{ position }} }",
             "set_position_topic": "zigbee2mqtt/zigfred_plus/l6/set",
+            "state_stopped": 'STOP',
             "state_closed": "CLOSE",
             "state_open": "OPEN",
             "state_topic": "zigbee2mqtt/zigfred_plus/l6",
@@ -1322,8 +1328,12 @@ describe('HomeAssistant extension', () => {
                 "breathe",
                 "okay",
                 "channel_change",
+                "candle",
+                "fireplace",
+                "colorloop",
                 "finish_effect",
-                "stop_effect"
+                "stop_effect",
+                "stop_hue_effect",
             ],
             "unique_id":"9_light_zigbee2mqtt"
          };
@@ -1847,8 +1857,12 @@ describe('HomeAssistant extension', () => {
                 "breathe",
                 "okay",
                 "channel_change",
+                "candle",
+                "fireplace",
+                "colorloop",
                 "finish_effect",
-                "stop_effect"
+                "stop_effect",
+                "stop_hue_effect",
             ],
             "unique_id":"9_light_zigbee2mqtt"
          };
@@ -1892,8 +1906,12 @@ describe('HomeAssistant extension', () => {
                 "breathe",
                 "okay",
                 "channel_change",
+                "candle",
+                "fireplace",
+                "colorloop",
                 "finish_effect",
-                "stop_effect"
+                "stop_effect",
+                "stop_hue_effect",
             ],
             "unique_id":"9_light_zigbee2mqtt"
         };
