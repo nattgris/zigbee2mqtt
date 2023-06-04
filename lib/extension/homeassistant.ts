@@ -979,7 +979,7 @@ export default class HomeAssistant extends Extension {
             const valueTemplate = firstExpose.access & ACCESS_STATE ?
                 `{{ value_json.${firstExpose.property} }}` : undefined;
 
-            if (firstExpose.access & ACCESS_STATE) {
+            if (firstExpose.access & ACCESS_STATE && !(firstExpose.access & ACCESS_SET)) {
                 discoveryEntries.push({
                     type: 'sensor',
                     object_id: firstExpose.property,
