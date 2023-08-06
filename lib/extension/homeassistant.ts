@@ -696,7 +696,7 @@ export default class HomeAssistant extends Extension {
                 power_factor: {device_class: 'power_factor', enabled_by_default: false,
                     entity_category: 'diagnostic', state_class: 'measurement'},
                 precision: {entity_category: 'config', icon: 'mdi:decimal-comma-increase'},
-                pressure: {device_class: 'pressure', state_class: 'measurement'},
+                pressure: {device_class: 'atmospheric_pressure', state_class: 'measurement'},
                 presence_timeout: {entity_category: 'config', icon: 'mdi:timer'},
                 reporting_time: {entity_category: 'config', icon: 'mdi:clock-time-one-outline'},
                 requested_brightness_level: {
@@ -732,6 +732,10 @@ export default class HomeAssistant extends Extension {
                     enabled_by_default: false,
                     entity_category: 'diagnostic',
                     state_class: 'measurement',
+                },
+                water_consumed: {
+                    device_class: 'water',
+                    state_class: 'total_increasing',
                 },
                 x_axis: {icon: 'mdi:axis-x-arrow'},
                 y_axis: {icon: 'mdi:axis-y-arrow'},
@@ -883,23 +887,41 @@ export default class HomeAssistant extends Extension {
                 });
             }
         } else if (firstExpose.type === 'text' || firstExpose.type === 'composite' || firstExpose.type === 'list') {
+            // Deprecated: remove text sensor
+            const settableText = firstExpose.type === 'text' && firstExpose.access & ACCESS_SET;
+            const lookup: {[s: string]: KeyValue} = {
+                action: {icon: 'mdi:gesture-double-tap'},
+                programming_mode: {icon: 'mdi:calendar-clock'},
+                program: {value_template: `{{ value_json.${firstExpose.property}|default("") ` +
+                    `| truncate(254, True, '', 0) }}`},
+            };
             if (firstExpose.access & ACCESS_STATE) {
-                const lookup: {[s: string]: KeyValue} = {
-                    action: {icon: 'mdi:gesture-double-tap'},
-                    programming_mode: {icon: 'mdi:calendar-clock'},
-                    program: {value_template: `{{ value_json.${firstExpose.property} | truncate(254, True, '', 0) }}`},
-                };
-
                 const discoveryEntry: DiscoveryEntry = {
                     type: 'sensor',
                     object_id: firstExpose.property,
                     mockProperties: [{property: firstExpose.property, value: null}],
                     discovery_payload: {
                         value_template: `{{ value_json.${firstExpose.property} }}`,
+                        enabled_by_default: !settableText,
                         ...lookup[firstExpose.name],
                     },
                 };
                 discoveryEntries.push(discoveryEntry);
+            }
+            if (settableText) {
+                discoveryEntries.push({
+                    type: 'text',
+                    object_id: firstExpose.property,
+                    mockProperties: [], // Already mocked above in case access STATE is supported
+                    discovery_payload: {
+                        state_topic: firstExpose.access & ACCESS_STATE,
+                        value_template: `{{ value_json.${firstExpose.property} }}`,
+                        command_topic_prefix: endpoint,
+                        command_topic: true,
+                        command_topic_postfix: firstExpose.property,
+                        ...lookup[firstExpose.name],
+                    },
+                });
             }
         } else {
             throw new Error(`Unsupported exposes type: '${firstExpose.type}'`);
