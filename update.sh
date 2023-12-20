@@ -17,11 +17,17 @@ fi
 echo "Creating backup of configuration..."
 cp -R data data-backup
 
+echo "Checking out changes to package-lock.json..."
+git checkout package-lock.json
+
 echo "Updating..."
 git pull
 
 echo "Installing dependencies..."
 npm ci
+
+echo "Building..."
+npm run build
 
 echo "Restore configuration..."
 cp -R data-backup/* data
