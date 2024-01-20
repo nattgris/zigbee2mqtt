@@ -1,4 +1,5 @@
 const data = require('./stub/data');
+const sleep = require('./stub/sleep');
 const logger = require('./stub/logger');
 const zigbeeHerdsman = require('./stub/zigbeeHerdsman');
 const zigbeeHerdsmanConverters = require('zigbee-herdsman-converters');
@@ -30,6 +31,7 @@ describe('Publish', () => {
         jest.useFakeTimers();
         data.writeEmptyState();
         controller = new Controller(jest.fn(), jest.fn());
+        sleep.mock();
         await controller.start();
         await flushPromises();
     });
@@ -50,12 +52,13 @@ describe('Publish', () => {
             g.command.mockClear();
         });
 
-        zigbeeHerdsmanConverters.toZigbeeConverters.__clearStore__();
+        zigbeeHerdsmanConverters.toZigbee.__clearStore__();
     });
 
     afterAll(async () => {
         jest.runOnlyPendingTimers();
         jest.useRealTimers();
+        sleep.restore();
     });
 
     it('Should publish messages to zigbee devices', async () => {
@@ -1343,7 +1346,7 @@ describe('Publish', () => {
         await MQTT.events.message('zigbee2mqtt/bulb_color/set', stringify({state: 'ON', brightness: 20, transition: 0.0}));
         await flushPromises();
 
-        zigbeeHerdsmanConverters.toZigbeeConverters.__clearStore__();
+        zigbeeHerdsmanConverters.toZigbee.__clearStore__();
 
         await MQTT.events.message('zigbee2mqtt/bulb_color/set', stringify({"state": "ON", "transition": 1.0}));
         await flushPromises();
@@ -1407,7 +1410,7 @@ describe('Publish', () => {
         expect(MQTT.publish.mock.calls[3]).toEqual([ 'zigbee2mqtt/bulb_color', stringify({"state":"ON","brightness":150}), { qos: 0, retain: false }, expect.any(Function)]);
     });
 
-    it('onlythis Scenes', async () => {
+    it('Scenes', async () => {
         const bulb_color_2 = zigbeeHerdsman.devices.bulb_color_2.getEndpoint(1);
         const bulb_2 = zigbeeHerdsman.devices.bulb_2.getEndpoint(1);
         const group = zigbeeHerdsman.groups.group_tradfri_remote;

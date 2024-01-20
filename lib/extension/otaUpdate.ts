@@ -2,14 +2,13 @@ import * as settings from '../util/settings';
 import logger from '../util/logger';
 import stringify from 'json-stable-stringify-without-jsonify';
 import utils from '../util/utils';
-import * as tradfriOTA from 'zigbee-herdsman-converters/lib/ota/tradfri';
-import * as zigbeeOTA from 'zigbee-herdsman-converters/lib/ota/zigbeeOTA';
 import Extension from './extension';
 import bind from 'bind-decorator';
 import Device from '../model/device';
 import dataDir from '../util/data';
 import * as URI from 'uri-js';
 import path from 'path';
+import * as zhc from 'zigbee-herdsman-converters';
 
 function isValidUrl(url: string): boolean {
     let parsed;
@@ -45,7 +44,7 @@ export default class OTAUpdate extends Extension {
         this.eventBus.onMQTTMessage(this, this.onMQTTMessage);
         this.eventBus.onDeviceMessage(this, this.onZigbeeEvent);
         if (settings.get().ota.ikea_ota_use_test_url) {
-            tradfriOTA.useTestURL();
+            zhc.ota.tradfri.useTestURL();
         }
 
         // Let zigbeeOTA module know if the override index file is provided
@@ -56,11 +55,11 @@ export default class OTAUpdate extends Extension {
                 overrideOTAIndex = dataDir.joinPath(overrideOTAIndex);
             }
 
-            zigbeeOTA.useIndexOverride(overrideOTAIndex);
+            zhc.ota.zigbeeOTA.useIndexOverride(overrideOTAIndex);
         }
 
         // In order to support local firmware files we need to let zigbeeOTA know where the data directory is
-        zigbeeOTA.setDataDir(dataDir.getPath());
+        zhc.ota.setDataDir(dataDir.getPath());
 
         // In case Zigbee2MQTT is restared during an update, progress and remaining values are still in state.
         // remove them.
@@ -80,7 +79,7 @@ export default class OTAUpdate extends Extension {
         logger.debug(`Device '${data.device.name}' requested OTA`);
 
         const automaticOTACheckDisabled = settings.get().ota.disable_automatic_update_check;
-        let supportsOTA = data.device.definition.hasOwnProperty('ota');
+        let supportsOTA = !!data.device.definition.ota;
         if (supportsOTA && !automaticOTACheckDisabled) {
             // When a device does a next image request, it will usually do it a few times after each other
             // with only 10 - 60 seconds inbetween. It doesn't make sense to check for a new update
@@ -93,7 +92,9 @@ export default class OTAUpdate extends Extension {
             this.lastChecked[data.device.ieeeAddr] = Date.now();
             let availableResult: zhc.OtaUpdateAvailableResult = null;
             try {
-                availableResult = await data.device.definition.ota.isUpdateAvailable(data.device.zh, logger, data.data);
+                // @ts-expect-error typing guaranteed by data.type
+                const dataData: zhc.ota.ImageInfo = data.data;
+                availableResult = await data.device.definition.ota.isUpdateAvailable(data.device.zh, logger, dataData);
             } catch (e) {
                 supportsOTA = false;
                 logger.debug(`Failed to check if update available for '${data.device.name}' (${e.message})`);
@@ -201,7 +202,7 @@ export default class OTAUpdate extends Extension {
                 }
 
                 try {
-                    const availableResult = await device.definition.ota.isUpdateAvailable(device.zh, logger);
+                    const availableResult = await device.definition.ota.isUpdateAvailable(device.zh, logger, null);
                     const msg = `${availableResult.available ? 'Update' : 'No update'} available for '${device.name}'`;
                     logger.info(msg);
 

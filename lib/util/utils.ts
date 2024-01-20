@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import {detailedDiff} from 'deep-object-diff';
 import objectAssignDeep from 'object-assign-deep';
+import type * as zhc from 'zigbee-herdsman-converters';
 
 // construct a local ISO8601 string (instead of UTC-based)
 // Example:
@@ -161,25 +162,21 @@ function loadModuleFromFile(modulePath: string): unknown {
     return loadModuleFromText(moduleCode);
 }
 
-function* getExternalConvertersDefinitions(settings: Settings): Generator<zhc.ExternalDefinition> {
-    const externalConverters = settings.external_converters;
+export function* loadExternalConverter(moduleName: string): Generator<ExternalDefinition> {
+    let converter;
 
-    for (const moduleName of externalConverters) {
-        let converter;
+    if (moduleName.endsWith('.js')) {
+        converter = loadModuleFromFile(data.joinPath(moduleName));
+    } else {
+        converter = require(moduleName);
+    }
 
-        if (moduleName.endsWith('.js')) {
-            converter = loadModuleFromFile(data.joinPath(moduleName));
-        } else {
-            converter = require(moduleName);
+    if (Array.isArray(converter)) {
+        for (const item of converter) {
+            yield item;
         }
-
-        if (Array.isArray(converter)) {
-            for (const item of converter) {
-                yield item;
-            }
-        } else {
-            yield converter;
-        }
+    } else {
+        yield converter;
     }
 }
 
@@ -371,6 +368,18 @@ function clone(obj: KeyValue): KeyValue {
     return JSON.parse(JSON.stringify(obj));
 }
 
+export function isNumericExposeFeature(feature: zhc.Feature): feature is zhc.Numeric {
+    return feature?.type === 'numeric';
+}
+
+export function isEnumExposeFeature(feature: zhc.Feature): feature is zhc.Enum {
+    return feature?.type === 'enum';
+}
+
+export function isBinaryExposeFeature(feature: zhc.Feature): feature is zhc.Binary {
+    return feature?.type === 'binary';
+}
+
 function computeSettingsToChange(current: KeyValue, new_: KeyValue): KeyValue {
     const diff: KeyValue = detailedDiff(current, new_);
 
@@ -426,7 +435,7 @@ function getScenes(entity: zh.Endpoint | zh.Group): Scene[] {
 export default {
     endpointNames, capitalize, getZigbee2MQTTVersion, getDependencyVersion, formatDate, objectHasProperties,
     equalsPartial, getObjectProperty, getResponse, parseJSON, loadModuleFromText, loadModuleFromFile,
-    getExternalConvertersDefinitions, removeNullPropertiesFromObject, toNetworkAddressHex, toSnakeCase,
+    removeNullPropertiesFromObject, toNetworkAddressHex, toSnakeCase,
     parseEntityID, isEndpoint, isZHGroup, hours, minutes, seconds, validateFriendlyName, sleep,
     sanitizeImageParameter, isAvailabilityEnabledForEntity, publishLastSeen, availabilityPayload,
     getAllFiles, filterProperties, flatten, arrayUnique, clone, computeSettingsToChange, getScenes,

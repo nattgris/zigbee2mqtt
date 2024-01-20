@@ -1,4 +1,5 @@
 const data = require('./stub/data');
+const sleep = require('./stub/sleep');
 const logger = require('./stub/logger');
 const stringify = require('json-stable-stringify-without-jsonify');
 const zigbeeHerdsman = require('./stub/zigbeeHerdsman');
@@ -15,6 +16,7 @@ describe('Receive', () => {
     beforeAll(async () => {
         jest.useFakeTimers();
         controller = new Controller(jest.fn(), jest.fn());
+        sleep.mock();
         await controller.start();
         await jest.runOnlyPendingTimers();
         await flushPromises();
@@ -30,6 +32,7 @@ describe('Receive', () => {
 
     afterAll(async () => {
         jest.useRealTimers();
+        sleep.restore();
     });
 
     it('Should handle a zigbee message', async () => {
@@ -388,18 +391,6 @@ describe('Receive', () => {
         expect(MQTT.publish).toHaveBeenCalledTimes(0);
     });
 
-    it('Should not handle messages from unsupported devices and link to docs', async () => {
-        const device = zigbeeHerdsman.devices.unsupported;
-        const data = {onOff: 1};
-        logger.warn.mockClear();
-        const payload = {data, cluster: 'genOnOff', device, endpoint: device.getEndpoint(1), type: 'attributeReport', linkquality: 10};
-        await zigbeeHerdsman.events.message(payload);
-        await flushPromises();
-        expect(logger.warn).toHaveBeenCalledWith(`Received message from unsupported device with Zigbee model 'notSupportedModelID' and manufacturer name 'notSupportedMfg'`);
-        expect(logger.warn).toHaveBeenCalledWith(`Please see: https://www.zigbee2mqtt.io/advanced/support-new-devices/01_support_new_devices.html`);
-        expect(MQTT.publish).toHaveBeenCalledTimes(0);
-    });
-
     it('Should not handle messages from still interviewing devices with unknown definition', async () => {
         const device = zigbeeHerdsman.devices.interviewing;
         const data = {onOff: 1};
@@ -408,7 +399,7 @@ describe('Receive', () => {
         await zigbeeHerdsman.events.message(payload);
         await flushPromises();
         expect(MQTT.publish).toHaveBeenCalledTimes(0);
-        expect(logger.debug).toHaveBeenCalledWith(`Skipping message, definition is undefined and still interviewing`);
+        expect(logger.debug).toHaveBeenCalledWith(`Skipping message, still interviewing`);
     });
 
     it('Should handle a command', async () => {
@@ -474,6 +465,6 @@ describe('Receive', () => {
         await flushPromises();
         expect(MQTT.publish).toHaveBeenCalledTimes(1);
         expect(MQTT.publish.mock.calls[0][0]).toStrictEqual('zigbee2mqtt/SP600_OLD');
-        expect(JSON.parse(MQTT.publish.mock.calls[0][1])).toStrictEqual({energy: 6.648, power: 496});
+        expect(JSON.parse(MQTT.publish.mock.calls[0][1])).toStrictEqual({energy: 6.65, power: 496});
     });
 });

@@ -4,6 +4,7 @@ import utils from '../util/utils';
 import * as settings from '../util/settings';
 import debounce from 'debounce';
 import bind from 'bind-decorator';
+import * as zhc from 'zigbee-herdsman-converters';
 
 const retrieveOnReconnect = [
     {keys: ['state']},
@@ -17,6 +18,7 @@ export default class Availability extends Extension {
     private retrieveStateDebouncers: {[s: string]: () => void} = {};
     private pingQueue: Device[] = [];
     private pingQueueExecuting = false;
+    private stopped = false;
 
     private getTimeout(device: Device): number {
         if (typeof device.options.availability === 'object' && device.options.availability?.timeout != null) {
@@ -92,6 +94,11 @@ export default class Availability extends Extension {
             }
         }
 
+        if (this.stopped) {
+            // Exit here to avoid triggering any follow-up activity (e.g., re-queuing another ping attempt).
+            return;
+        }
+
         this.publishAvailability(device, !pingedSuccessfully);
         this.resetTimer(device);
         this.removeFromPingQueue(device);
@@ -103,6 +110,10 @@ export default class Availability extends Extension {
     }
 
     override async start(): Promise<void> {
+        if (this.stopped) {
+            throw new Error('This extension cannot be restarted.');
+        }
+
         this.eventBus.onEntityRenamed(this, (data) => {
             if (utils.isAvailabilityEnabledForEntity(data.entity, settings.get())) {
                 this.mqtt.publish(`${data.from}/availability`, null, {retain: true, qos: 1});
@@ -183,8 +194,10 @@ export default class Availability extends Extension {
     }
 
     override async stop(): Promise<void> {
+        this.stopped = true;
+        this.pingQueue = [];
         Object.values(this.timers).forEach((t) => clearTimeout(t));
-        super.stop();
+        await super.stop();
     }
 
     private retrieveState(device: Device): void {
@@ -199,8 +212,13 @@ export default class Availability extends Extension {
                 for (const item of retrieveOnReconnect) {
                     if (item.condition && this.state.get(device) && !item.condition(this.state.get(device))) continue;
                     const converter = device.definition.toZigbee.find((c) => c.key.find((k) => item.keys.includes(k)));
-                    await converter?.convertGet?.(device.endpoint(), item.keys[0],
-                        {message: this.state.get(device), mapped: device.definition})
+                    const options: KeyValue = device.options;
+                    const state = this.state.get(device);
+                    const meta: zhc.Tz.Meta = {
+                        message: this.state.get(device), mapped: device.definition, logger, endpoint_name: null,
+                        options, state, device: device.zh,
+                    };
+                    await converter?.convertGet?.(device.endpoint(), item.keys[0], meta)
                         .catch((e) => {
                             logger.error(`Failed to read state of '${device.name}' after reconnect (${e.message})`);
                         });

@@ -5,12 +5,14 @@ const logger = require('./stub/logger');
 const zigbeeHerdsman = require('./stub/zigbeeHerdsman');
 const flushPromises = require('./lib/flushPromises');
 const MQTT = require('./stub/mqtt');
+const sleep = require('./stub/sleep');
 const Controller = require('../lib/controller');
 const fs = require('fs');
 const path = require('path');
 
 describe('HomeAssistant extension', () => {
     let version;
+    let z2m_version;
     let controller;
     let extension;
     let origin;
@@ -32,28 +34,30 @@ describe('HomeAssistant extension', () => {
     });
 
     beforeAll(async () => {
-        version = await require('../lib/util/utils').default.getZigbee2MQTTVersion();
-        origin = {name: 'Zigbee2MQTT', sw: version.version, url: 'https://www.zigbee2mqtt.io'}
-        version = `Zigbee2MQTT ${version.version}`;
+        z2m_version = (await require('../lib/util/utils').default.getZigbee2MQTTVersion()).version;
+        origin = {name: 'Zigbee2MQTT', sw: z2m_version, url: 'https://www.zigbee2mqtt.io'};
+        version = `Zigbee2MQTT ${z2m_version}`;
         jest.useFakeTimers();
         settings.set(['homeassistant'], true);
         data.writeDefaultConfiguration();
         settings.reRead();
         data.writeEmptyState();
         MQTT.publish.mockClear();
+        sleep.mock();
         controller = new Controller(false);
         await controller.start();
     });
 
     afterAll(async () => {
         jest.useRealTimers();
+        sleep.restore();
     });
 
     it('Should not have duplicate type/object_ids in a mapping', () => {
         const duplicated = [];
-        require('zigbee-herdsman-converters').devices.forEach((d) => {
+        require('zigbee-herdsman-converters').definitions.forEach((d) => {
             const exposes = typeof d.exposes == 'function' ? d.exposes() : d.exposes;
-            const device = {definition: d, isDevice: () => true, options: {}, exposes: () => exposes, zh: {endpoints: []}};
+            const device = {definition: d, isDevice: () => true, isGroup: () => false, options: {}, exposes: () => exposes, zh: {endpoints: []}};
             const configs = extension.getConfigs(device);
             const cfg_type_object_ids = [];
 
@@ -89,6 +93,7 @@ describe('HomeAssistant extension', () => {
                "sw_version": version,
                "model": "Group",
                "manufacturer": "Zigbee2MQTT",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "max_mireds": 454,
             "min_mireds": 250,
@@ -134,6 +139,7 @@ describe('HomeAssistant extension', () => {
                "sw_version": version,
                "model": "Group",
                "manufacturer": "Zigbee2MQTT",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic":"zigbee2mqtt/ha_discovery_group",
             "name":null,
@@ -169,6 +175,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
             'enabled_by_default': true,
@@ -198,6 +205,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -226,6 +234,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -255,6 +264,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -285,6 +295,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -306,7 +317,8 @@ describe('HomeAssistant extension', () => {
                 "manufacturer":"Xiaomi",
                 "model":"Aqara double key wired wall switch without neutral wire. Doesn't work as a router and doesn't support power meter (QBKG03LM)",
                 "name":"wall_switch_double",
-                "sw_version": null
+                "sw_version": null,
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic":"zigbee2mqtt/wall_switch_double",
             "name":"Left",
@@ -336,7 +348,8 @@ describe('HomeAssistant extension', () => {
                 "manufacturer":"Xiaomi",
                 "model":"Aqara double key wired wall switch without neutral wire. Doesn't work as a router and doesn't support power meter (QBKG03LM)",
                 "name":"wall_switch_double",
-                "sw_version": null
+                "sw_version": null,
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic":"zigbee2mqtt/wall_switch_double",
             "name":"Right",
@@ -373,6 +386,7 @@ describe('HomeAssistant extension', () => {
                 "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
                 "name":"bulb",
                 "sw_version": null,
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "effect":true,
             "effect_list":[
@@ -431,6 +445,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -459,6 +474,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -487,6 +503,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -545,6 +562,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': 'test',
                 'model': 'custom model',
                 'manufacturer': 'From Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
             'expire_after': 90,
@@ -572,6 +590,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'custom model',
                 'manufacturer': 'Not from Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'origin': origin,
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
@@ -618,6 +637,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
             'enabled_by_default': true,
@@ -647,6 +667,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -689,7 +710,8 @@ describe('HomeAssistant extension', () => {
               "manufacturer": "Xiaomi",
               "model": "Aqara single key wired wall switch without neutral wire. Doesn't work as a router and doesn't support power meter (QBKG04LM)",
               "name": "my_switch",
-              "sw_version": null
+              "sw_version": null,
+              "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic": "zigbee2mqtt/my_switch",
             "name": "my_light_name_override",
@@ -772,7 +794,8 @@ describe('HomeAssistant extension', () => {
                "name":"fan",
                "sw_version": null,
                "model":"Universal wink enabled white ceiling fan premier remote control (99432)",
-               "manufacturer":"Hampton Bay"
+               "manufacturer":"Hampton Bay",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
          };
@@ -805,7 +828,8 @@ describe('HomeAssistant extension', () => {
                 "manufacturer":"TuYa",
                 "model":"Radiator valve with thermostat (TS0601_thermostat)",
                 "name":"TS0601_thermostat",
-                "sw_version":null
+                "sw_version":null,
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "preset_mode_command_topic":"zigbee2mqtt/TS0601_thermostat/set/preset",
             "preset_modes":[
@@ -874,7 +898,8 @@ describe('HomeAssistant extension', () => {
                 name: 'smart vent',
                 sw_version: null,
                 model: 'Smart vent (SV01)',
-                manufacturer: 'Keen Home'
+                manufacturer: 'Keen Home',
+                via_device: 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -894,7 +919,8 @@ describe('HomeAssistant extension', () => {
                 "manufacturer": "Siglis",
                 "model": "zigfred plus smart in-wall switch (ZFP-1A-CH)",
                 "name": "zigfred_plus",
-                "sw_version": null
+                "sw_version": null,
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic": "zigbee2mqtt/zigfred_plus/l6",
             "name": "L6",
@@ -946,6 +972,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -1074,6 +1101,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -1211,6 +1239,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability_mode': 'all',
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}, {topic: 'zigbee2mqtt/weather_sensor/availability'}],
@@ -1261,13 +1290,6 @@ describe('HomeAssistant extension', () => {
         );
     });
 
-    it('Should not clear discovery when unsupported device is removed', async () => {
-        MQTT.publish.mockClear();
-        MQTT.events.message('zigbee2mqtt/bridge/config/remove', 'unsupported2');
-        await flushPromises();
-        expect(MQTT.publish).toHaveBeenCalledTimes(1);
-    });
-
     it('Should refresh discovery when device is renamed', async () => {
         await MQTT.events.message('homeassistant/device_automation/0x0017880104e45522/action_double/config', stringify({topic: 'zigbee2mqtt/weather_sensor/action'}));
         await flushPromises();
@@ -1294,6 +1316,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -1328,7 +1351,8 @@ describe('HomeAssistant extension', () => {
                     "name":"weather_sensor_renamed",
                     "sw_version": null,
                     "model":"Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)",
-                    "manufacturer":"Xiaomi"
+                    "manufacturer":"Xiaomi",
+                    "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
                 }
             }),
             { retain: true, qos: 1 },
@@ -1355,6 +1379,7 @@ describe('HomeAssistant extension', () => {
                "sw_version": version,
                "model": "Group",
                "manufacturer": "Zigbee2MQTT",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic":"zigbee2mqtt/ha_discovery_group_new",
             "max_mireds": 454,
@@ -1428,6 +1453,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -1459,7 +1485,8 @@ describe('HomeAssistant extension', () => {
                 "name":"bulb",
                 'sw_version': null,
                 "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
-                "manufacturer":"IKEA"
+                "manufacturer":"IKEA",
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
             'device_class': 'update',
@@ -1501,7 +1528,8 @@ describe('HomeAssistant extension', () => {
                 "name":"button",
                 "sw_version": null,
                 "model":"Aqara wireless switch (WXKG11LM)",
-                "manufacturer":"Xiaomi"
+                "manufacturer":"Xiaomi",
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             }
         };
 
@@ -1526,7 +1554,8 @@ describe('HomeAssistant extension', () => {
                 "name":"button",
                 "sw_version": null,
                 "model":"Aqara wireless switch (WXKG11LM)",
-                "manufacturer":"Xiaomi"
+                "manufacturer":"Xiaomi",
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             }
         };
 
@@ -1691,7 +1720,8 @@ describe('HomeAssistant extension', () => {
                 "name":"button",
                 "sw_version": null,
                 "model":"Aqara wireless switch (WXKG11LM)",
-                "manufacturer":"Xiaomi"
+                "manufacturer":"Xiaomi",
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             }
         };
 
@@ -1866,6 +1896,7 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae'
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -1895,6 +1926,7 @@ describe('HomeAssistant extension', () => {
                "sw_version": version,
                "model": "Group",
                "manufacturer": "Zigbee2MQTT",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "json_attributes_topic":"zigbee2mqtt/ha_discovery_group",
             "max_mireds": 454,
@@ -1948,6 +1980,7 @@ describe('HomeAssistant extension', () => {
                "sw_version": version,
                "model": "Group",
                "manufacturer": "Zigbee2MQTT",
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "max_mireds": 454,
             "min_mireds": 250,
@@ -2008,7 +2041,8 @@ describe('HomeAssistant extension', () => {
                "manufacturer":"IKEA",
                "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
                "name":"bulb",
-               "sw_version":null
+               "sw_version":null,
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "effect":true,
             "effect_list":[
@@ -2058,7 +2092,8 @@ describe('HomeAssistant extension', () => {
                "manufacturer":"IKEA",
                "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
                "name":"bulb",
-               "sw_version": null
+               "sw_version": null,
+               "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
             "enabled_by_default":false,
             "icon":"mdi:clock",
@@ -2106,7 +2141,8 @@ describe('HomeAssistant extension', () => {
                 'sw_version': null,
                 'model': 'Aqara temperature, humidity and pressure sensor (WSDCGQ11LM)',
                 'manufacturer': 'Xiaomi',
-                'configuration_url': 'http://zigbee.mqtt/#/device/0x0017880104e45522/info'
+                'configuration_url': 'http://zigbee.mqtt/#/device/0x0017880104e45522/info',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
         };
@@ -2120,18 +2156,27 @@ describe('HomeAssistant extension', () => {
     });
 
     it('Should rediscover scenes when a scene is changed', async () => {
-        const device = controller.zigbee.resolveEntity(zigbeeHerdsman.devices.bulb_color_2);
         MQTT.publish.mockClear();
         controller.eventBus.emitScenesChanged();
         await flushPromises();
+
+        // Discovery messages for scenes have been purged.
         expect(MQTT.publish).toHaveBeenCalledWith(
-            `homeassistant/scene/${device.ID}/scene_1/config`,
+            `homeassistant/scene/0x000b57fffec6a5b4/scene_1/config`,
             null,
             {retain: true, qos: 1},
             expect.any(Function),
         );
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            `homeassistant/scene/1221051039810110150109113116116_9/scene_4/config`,
+            null,
+            {retain: true, qos: 1},
+            expect.any(Function),
+        );
+        jest.runOnlyPendingTimers();
+        await flushPromises();
 
-        const payload = {
+        let payload = {
             'name': 'Chill scene',
             'command_topic': 'zigbee2mqtt/bulb_color_2/set',
             'payload_on': '{ "scene_recall": 1 }',
@@ -2144,15 +2189,305 @@ describe('HomeAssistant extension', () => {
                 'sw_version': '5.127.1.26581',
                 'model': 'Hue Go (7146060PH)',
                 'manufacturer': 'Philips',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
             },
             'origin': origin,
             'availability': [ { 'topic': 'zigbee2mqtt/bridge/state' } ]
         }
-
         expect(MQTT.publish).toHaveBeenCalledWith(
-            `homeassistant/scene/${device.ID}/scene_1/config`,
+            `homeassistant/scene/0x000b57fffec6a5b4/scene_1/config`,
             stringify(payload),
             {retain: true, qos: 1},
+            expect.any(Function),
+        );
+
+        payload = {
+            'name': 'Scene 4',
+            'command_topic': 'zigbee2mqtt/ha_discovery_group/set',
+            'payload_on': '{ "scene_recall": 4 }',
+            'json_attributes_topic':'zigbee2mqtt/ha_discovery_group',
+            'object_id': 'ha_discovery_group_4_scene_4',
+            'unique_id': '9_scene_4_zigbee2mqtt',
+            'device': {
+              'identifiers': [ 'zigbee2mqtt_1221051039810110150109113116116_9' ],
+              'name': 'ha_discovery_group',
+              'sw_version': version,
+              'model': 'Group',
+              'manufacturer': 'Zigbee2MQTT',
+              'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae'
+            },
+            'origin': origin,
+            'availability': [ { 'topic': 'zigbee2mqtt/bridge/state' } ]
+        }
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            `homeassistant/scene/1221051039810110150109113116116_9/scene_4/config`,
+            stringify(payload),
+            {retain: true, qos: 1},
+            expect.any(Function),
+        );
+
+        // Only discovery entries for entities with scenes need to be republished.
+        expect(MQTT.publish).toHaveBeenCalledTimes( 16 );
+    });
+
+    it('Should not clear bridge entities unnecessarily', async () => {
+        MQTT.publish.mockClear();
+
+        const topic = 'homeassistant/button/1221051039810110150109113116116_0x00124b00120144ae/restart/config';
+        const payload = {
+            'name': 'Restart',
+            'object_id': 'zigbee2mqtt_bridge_restart',
+            'unique_id': 'bridge_0x00124b00120144ae_restart_zigbee2mqtt',
+            'device_class': 'restart',
+            'command_topic': 'zigbee2mqtt/bridge/request/restart',
+            'payload_press': '',
+            'origin': origin,
+            'device': {
+                'name': 'Zigbee2MQTT Bridge',
+                'identifiers': ['zigbee2mqtt_bridge_0x00124b00120144ae'],
+                'manufacturer': 'Zigbee2MQTT',
+                'model': 'Bridge',
+                'hw_version': 'z-Stack 20190425',
+                'sw_version': z2m_version,
+            },
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+
+        controller.eventBus.emitMQTTMessage({
+            topic: topic,
+            message: stringify(payload),
+        });
+        await flushPromises();
+
+        expect(MQTT.publish).not.toHaveBeenCalledWith(
+            topic,
+            null,
+            {retain: true, qos: 1},
+            expect.any(Function),
+        );
+    });
+
+    it('Should discover bridge entities', async () => {
+        settings.set(['advanced', 'homeassistant_legacy_entity_attributes'], false);
+        await resetExtension();
+
+        const devicePayload = {
+            'name': 'Zigbee2MQTT Bridge',
+            'identifiers': ['zigbee2mqtt_bridge_0x00124b00120144ae'],
+            'manufacturer': 'Zigbee2MQTT',
+            'model': 'Bridge',
+            'hw_version': 'z-Stack 20190425',
+            'sw_version': z2m_version,
+        };
+
+        // Binary sensors.
+        let payload;
+        payload = {
+            'name': 'Connection state',
+            'object_id': 'zigbee2mqtt_bridge_connection_state',
+            'entity_category': 'diagnostic',
+            'device_class': 'connectivity',
+            'unique_id': 'bridge_0x00124b00120144ae_connection_state_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/state',
+            'value_template': '{{ value }}',
+            'payload_on': 'online',
+            'payload_off': 'offline',
+            'origin': origin,
+            'device': devicePayload,
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/binary_sensor/1221051039810110150109113116116_0x00124b00120144ae/connection_state/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        payload = {
+            'name': 'Restart required',
+            'object_id': 'zigbee2mqtt_bridge_restart_required',
+            'entity_category': 'diagnostic',
+            'device_class': 'problem',
+            'enabled_by_default': false,
+            'unique_id': 'bridge_0x00124b00120144ae_restart_required_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ value_json.restart_required }}',
+            'payload_on': true,
+            'payload_off': false,
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/binary_sensor/1221051039810110150109113116116_0x00124b00120144ae/restart_required/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        // Buttons.
+        payload = {
+            'name': 'Restart',
+            'object_id': 'zigbee2mqtt_bridge_restart',
+            'unique_id': 'bridge_0x00124b00120144ae_restart_zigbee2mqtt',
+            'device_class': 'restart',
+            'command_topic': 'zigbee2mqtt/bridge/request/restart',
+            'payload_press': '',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/button/1221051039810110150109113116116_0x00124b00120144ae/restart/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        // Selects.
+        payload = {
+            'name': 'Log level',
+            'object_id': 'zigbee2mqtt_bridge_log_level',
+            'entity_category': 'config',
+            'unique_id': 'bridge_0x00124b00120144ae_log_level_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ value_json.log_level | lower }}',
+            'command_topic': 'zigbee2mqtt/bridge/request/options',
+            'command_template':
+                '{"options": {"advanced": {"log_level": "{{ value }}" } } }',
+            'options': ['info', 'warn', 'error', 'debug'],
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/select/1221051039810110150109113116116_0x00124b00120144ae/log_level/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        // Sensors.
+        payload = {
+            'name': 'Version',
+            'object_id': 'zigbee2mqtt_bridge_version',
+            'entity_category': 'diagnostic',
+            'icon': 'mdi:zigbee',
+            'unique_id': 'bridge_0x00124b00120144ae_version_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ value_json.version }}',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/sensor/1221051039810110150109113116116_0x00124b00120144ae/version/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        payload = {
+            'name': 'Coordinator version',
+            'object_id': 'zigbee2mqtt_bridge_coordinator_version',
+            'entity_category': 'diagnostic',
+            'enabled_by_default': false,
+            'icon': 'mdi:chip',
+            'unique_id': 'bridge_0x00124b00120144ae_coordinator_version_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ value_json.coordinator.meta.revision }}',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/sensor/1221051039810110150109113116116_0x00124b00120144ae/coordinator_version/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        payload = {
+            'name': 'Network map',
+            'object_id': 'zigbee2mqtt_bridge_network_map',
+            'entity_category': 'diagnostic',
+            'enabled_by_default': false,
+            'unique_id': 'bridge_0x00124b00120144ae_network_map_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/response/networkmap',
+            'value_template': "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}",
+            'json_attributes_topic': 'zigbee2mqtt/bridge/response/networkmap',
+            'json_attributes_template': '{{ value_json.data.value | tojson }}',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/sensor/1221051039810110150109113116116_0x00124b00120144ae/network_map/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        payload = {
+            'name': 'Permit join timeout',
+            'object_id': 'zigbee2mqtt_bridge_permit_join_timeout',
+            'entity_category': 'diagnostic',
+            'device_class': 'duration',
+            'unit_of_measurement': 's',
+            'unique_id': 'bridge_0x00124b00120144ae_permit_join_timeout_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ iif(value_json.permit_join_timeout is defined, value_json.permit_join_timeout, None) }}',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
+            'availability_mode': 'all',
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/sensor/1221051039810110150109113116116_0x00124b00120144ae/permit_join_timeout/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+
+        // Switches.
+        payload = {
+            'name': 'Permit join',
+            'object_id': 'zigbee2mqtt_bridge_permit_join',
+            'icon': 'mdi:human-greeting-proximity',
+            'unique_id': 'bridge_0x00124b00120144ae_permit_join_zigbee2mqtt',
+            'state_topic': 'zigbee2mqtt/bridge/info',
+            'value_template': '{{ value_json.permit_join | lower }}',
+            'command_topic': 'zigbee2mqtt/bridge/request/permit_join',
+            'payload_on': 'true',
+            'payload_off': 'false',
+            'origin': origin,
+            'device': devicePayload,
+            'availability': [ { 'topic': 'zigbee2mqtt/bridge/state' } ],
+            'availability_mode': 'all'
+        };
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/switch/1221051039810110150109113116116_0x00124b00120144ae/permit_join/config',
+            stringify(payload),
+            { retain: true, qos: 1 },
+            expect.any(Function),
+        );
+    });
+
+    it('Should remove discovery entries for removed exposes when device options change', async () => {
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/bridge/request/device/options', stringify({"id": "0xf4ce368a38be56a1", "options": {"dimmer_1_enabled": "false", "dimmer_1_dimming_enabled": "false"}}));
+        await flushPromises();
+
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'homeassistant/light/0xf4ce368a38be56a1/light_l2/config',
+            null,
+            { retain: true, qos: 1 },
             expect.any(Function),
         );
     });
