@@ -146,6 +146,7 @@ export default class HomeAssistant extends Extension {
         this.eventBus.onDeviceMessage(this, this.onZigbeeEvent);
         this.eventBus.onScenesChanged(this, this.onScenesChanged);
         this.eventBus.onEntityOptionsChanged(this, (data) => this.discover(data.entity, true));
+        this.eventBus.onExposesChanged(this, (data) => this.discover(data.device, true));
 
         this.mqtt.subscribe(this.statusTopic);
         this.mqtt.subscribe(defaultStatusTopic);
@@ -601,6 +602,7 @@ export default class HomeAssistant extends Extension {
             discoveryEntries.push(discoveryEntry);
         } else if (isBinaryExposeFeature(firstExpose)) {
             const lookup: {[s: string]: KeyValue}= {
+                auto_off: {icon: 'mdi:flash-auto'},
                 battery_low: {entity_category: 'diagnostic', device_class: 'battery'},
                 button_lock: {entity_category: 'config', icon: 'mdi:lock'},
                 calibration: {entity_category: 'config', icon: 'mdi:progress-wrench'},
@@ -628,11 +630,14 @@ export default class HomeAssistant extends Extension {
                 motor_reversal: {entity_category: 'config', icon: 'mdi:arrow-left-right'},
                 moving: {device_class: 'moving'},
                 no_position_support: {entity_category: 'config', icon: 'mdi:minus-circle-outline'},
+                noise_detected: {device_class: 'sound'},
                 occupancy: {device_class: 'motion'},
                 power_outage_memory: {entity_category: 'config', icon: 'mdi:memory'},
                 presence: {device_class: 'presence'},
+                setup: {device_class: 'running'},
                 smoke: {device_class: 'smoke'},
                 sos: {device_class: 'safety'},
+                schedule: {icon: 'mdi:calendar'},
                 status_capacitive_load: {entity_category: 'diagnostic', icon: 'mdi:tune'},
                 status_forward_phase_control: {entity_category: 'diagnostic', icon: 'mdi:tune'},
                 status_inductive_load: {entity_category: 'diagnostic', icon: 'mdi:tune'},
@@ -641,10 +646,15 @@ export default class HomeAssistant extends Extension {
                 tamper: {device_class: 'tamper'},
                 temperature_scale: {entity_category: 'config', icon: 'mdi:temperature-celsius'},
                 test: {entity_category: 'diagnostic', icon: 'mdi:test-tube'},
+                trigger_indicator: {icon: 'mdi:led-on'},
+                valve_alarm: {device_class: 'problem'},
+                valve_detection: {icon: 'mdi:pipe-valve'},
                 valve_state: {device_class: 'opening'},
                 vibration: {device_class: 'vibration'},
                 water_leak: {device_class: 'moisture'},
                 window: {device_class: 'window'},
+                window_detection: {icon: 'mdi:window-open-variant'},
+                window_open: {device_class: 'window'},
             };
 
             /**
@@ -701,6 +711,7 @@ export default class HomeAssistant extends Extension {
             const lookup: {[s: string]: KeyValue} = {
                 ac_frequency: {device_class: 'frequency', enabled_by_default: false, entity_category: 'diagnostic',
                     state_class: 'measurement'},
+                action_duration: {icon: 'mdi:timer', device_class: 'duration'},
                 alarm_humidity_max: {device_class: 'humidity', entity_category: 'config', icon: 'mdi:water-plus'},
                 alarm_humidity_min: {device_class: 'humidity', entity_category: 'config', icon: 'mdi:water-minus'},
                 alarm_temperature_max: {device_class: 'temperature', entity_category: 'config',
@@ -751,6 +762,7 @@ export default class HomeAssistant extends Extension {
                     state_class: 'measurement',
                 },
                 deadzone_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
+                detection_interval: {icon: 'mdi:timer'},
                 device_temperature: {
                     device_class: 'temperature', entity_category: 'diagnostic', state_class: 'measurement',
                 },
@@ -758,6 +770,7 @@ export default class HomeAssistant extends Extension {
                 eco2: {device_class: 'carbon_dioxide', state_class: 'measurement'},
                 eco_temperature: {entity_category: 'config', icon: 'mdi:thermometer'},
                 energy: {device_class: 'energy', state_class: 'total_increasing'},
+                external_temperature_input: {icon: 'mdi:thermometer'},
                 formaldehyd: {state_class: 'measurement'},
                 gas_density: {icon: 'mdi:google-circles-communities', state_class: 'measurement'},
                 hcho: {icon: 'mdi:air-filter', state_class: 'measurement'},
@@ -781,7 +794,9 @@ export default class HomeAssistant extends Extension {
                 min_temperature: {entity_category: 'config', icon: 'mdi:thermometer-low'},
                 minimum_on_level: {entity_category: 'config'},
                 measurement_poll_interval: {entity_category: 'config', icon: 'mdi:clock-out'},
+                noise: {device_class: 'sound_pressure', state_class: 'measurement'},
                 occupancy_timeout: {entity_category: 'config', icon: 'mdi:timer'},
+                overload_protection: {icon: 'mdi:flash'},
                 pm10: {device_class: 'pm10', state_class: 'measurement'},
                 pm25: {device_class: 'pm25', state_class: 'measurement'},
                 people: {state_class: 'measurement', icon: 'mdi:account-multiple'},
@@ -789,6 +804,7 @@ export default class HomeAssistant extends Extension {
                 power: {device_class: 'power', entity_category: 'diagnostic', state_class: 'measurement'},
                 power_factor: {device_class: 'power_factor', enabled_by_default: false,
                     entity_category: 'diagnostic', state_class: 'measurement'},
+                power_outage_count: {icon: 'mdi:counter', enabled_by_default: false},
                 precision: {entity_category: 'config', icon: 'mdi:decimal-comma-increase'},
                 pressure: {device_class: 'atmospheric_pressure', state_class: 'measurement'},
                 presence_timeout: {entity_category: 'config', icon: 'mdi:timer'},
@@ -806,6 +822,7 @@ export default class HomeAssistant extends Extension {
                 temperature_max: {entity_category: 'config', icon: 'mdi:thermometer-plus'},
                 temperature_min: {entity_category: 'config', icon: 'mdi:thermometer-minus'},
                 transition: {entity_category: 'config', icon: 'mdi:transition'},
+                trigger_count: {icon: 'mdi:counter', enabled_by_default: false},
                 voc: {device_class: 'volatile_organic_compounds', state_class: 'measurement'},
                 voc_index: {state_class: 'measurement'},
                 vibration_timeout: {entity_category: 'config', icon: 'mdi:timer'},
@@ -926,6 +943,7 @@ export default class HomeAssistant extends Extension {
                 alarm_temperature: {entity_category: 'config', icon: 'mdi:thermometer-alert'},
                 backlight_auto_dim: {entity_category: 'config', icon: 'mdi:brightness-auto'},
                 backlight_mode: {entity_category: 'config', icon: 'mdi:lightbulb'},
+                calibrate: {icon: 'mdi:tune'},
                 color_power_on_behavior: {entity_category: 'config', icon: 'mdi:palette'},
                 control_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 device_mode: {entity_category: 'config', icon: 'mdi:tune'},
@@ -933,6 +951,7 @@ export default class HomeAssistant extends Extension {
                 force: {entity_category: 'config', icon: 'mdi:valve'},
                 indicator_mode: {entity_category: 'config', icon: 'mdi:led-on'},
                 keep_time: {entity_category: 'config', icon: 'mdi:av-timer'},
+                identify: {device_class: 'identify'},
                 keypad_lockout: {entity_category: 'config', icon: 'mdi:lock'},
                 load_detection_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 load_dimmable: {entity_category: 'config', icon: 'mdi:chart-bell-curve'},
@@ -940,13 +959,16 @@ export default class HomeAssistant extends Extension {
                 melody: {entity_category: 'config', icon: 'mdi:music-note'},
                 mode_phase_control: {entity_category: 'config', icon: 'mdi:tune'},
                 mode: {entity_category: 'config', icon: 'mdi:tune'},
+                mode_switch: {icon: 'mdi:tune'},
                 motion_sensitivity: {entity_category: 'config', icon: 'mdi:tune'},
                 operation_mode: {entity_category: 'config', icon: 'mdi:tune'},
                 power_on_behavior: {entity_category: 'config', icon: 'mdi:power-settings'},
                 power_outage_memory: {entity_category: 'config', icon: 'mdi:power-settings'},
                 power_supply_mode: {entity_category: 'config', icon: 'mdi:power-settings'},
                 power_type: {entity_category: 'config', icon: 'mdi:lightning-bolt-circle'},
+                restart: {device_class: 'restart'},
                 sensitivity: {entity_category: 'config', icon: 'mdi:tune'},
+                sensor: {icon: 'mdi:tune'},
                 sensors_type: {entity_category: 'config', icon: 'mdi:tune'},
                 sound_volume: {entity_category: 'config', icon: 'mdi:volume-high'},
                 status: {icon: 'mdi:state-machine'},
@@ -954,6 +976,7 @@ export default class HomeAssistant extends Extension {
                 temperature_display_mode: {entity_category: 'config', icon: 'mdi:thermometer'},
                 temperature_sensor_select: {entity_category: 'config', icon: 'mdi:home-thermometer'},
                 thermostat_unit: {entity_category: 'config', icon: 'mdi:thermometer'},
+                update: {device_class: 'update'},
                 volume: {entity_category: 'config', icon: 'mdi: volume-high'},
                 week: {entity_category: 'config', icon: 'mdi:calendar-clock'},
             };
@@ -993,6 +1016,29 @@ export default class HomeAssistant extends Extension {
                         command_topic: true,
                         command_topic_postfix: firstExpose.property,
                         options: firstExpose.values.map((v) => v.toString()),
+                        enabled_by_default: firstExpose.values.length !== 1, // hide if button is exposed
+                        ...lookup[firstExpose.name],
+                    },
+                });
+            }
+
+            /**
+             * If enum has only item and only supports SET then expose as button entity.
+             * Note: select entity is hidden by default to avoid breaking changes
+             * for selects already existing in HA (legacy).
+             */
+            if (firstExpose.access & ACCESS_SET && firstExpose.values.length === 1) {
+                discoveryEntries.push({
+                    type: 'button',
+                    object_id: firstExpose.property,
+                    mockProperties: [],
+                    discovery_payload: {
+                        name: endpoint ? `${firstExpose.label} ${endpoint}` : firstExpose.label,
+                        state_topic: false,
+                        command_topic_prefix: endpoint,
+                        command_topic: true,
+                        command_topic_postfix: firstExpose.property,
+                        payload_press: firstExpose.values[0].toString(),
                         ...lookup[firstExpose.name],
                     },
                 });
@@ -1002,10 +1048,12 @@ export default class HomeAssistant extends Extension {
             const settableText = firstExpose.type === 'text' && firstExpose.access & ACCESS_SET;
             const lookup: {[s: string]: KeyValue} = {
                 action: {icon: 'mdi:gesture-double-tap'},
+                color_options: {icon: 'mdi:palette'},
                 level_config: {entity_category: 'diagnostic'},
                 programming_mode: {icon: 'mdi:calendar-clock'},
                 program: {value_template: `{{ value_json.${firstExpose.property}|default('',True) ` +
                     `| truncate(254, True, '', 0) }}`},
+                schedule_settings: {icon: 'mdi:calendar-clock'},
             };
             if (firstExpose.access & ACCESS_STATE) {
                 const discoveryEntry: DiscoveryEntry = {
@@ -1039,6 +1087,14 @@ export default class HomeAssistant extends Extension {
             }
         } else {
             throw new Error(`Unsupported exposes type: '${firstExpose.type}'`);
+        }
+
+        // Exposes with category 'config' or 'diagnostic' are always added to the respective category.
+        // This takes precedence over definitions in this file.
+        if (firstExpose.category === 'config') {
+            discoveryEntries.forEach((d) => d.discovery_payload.entity_category = 'config');
+        } else if (firstExpose.category === 'diagnostic') {
+            discoveryEntries.forEach((d) => d.discovery_payload.entity_category = 'diagnostic');
         }
 
         discoveryEntries.forEach((d) => {
@@ -1613,20 +1669,15 @@ export default class HomeAssistant extends Extension {
         this.discover(data.device);
     }
 
-    @bind async onScenesChanged(): Promise<void> {
-        // Re-trigger MQTT discovery of all devices and groups, similar to bridge.ts
-        const entities = [...this.zigbee.devices(), ...this.zigbee.groups()];
-        const clearedEntities = new Set<Device|Group>();
+    @bind async onScenesChanged(data: eventdata.ScenesChanged): Promise<void> {
+        // Re-trigger MQTT discovery of changed devices and groups, similar to bridge.ts
 
         // First, clear existing scene discovery topics
-        entities.forEach((entity) => {
-            logger.debug(`Clearing Home Assistant scene discovery topics for '${entity.name}'`);
-            this.discovered[this.getDiscoverKey(entity)]?.topics.forEach((topic) => {
-                if (topic.startsWith('scene')) {
-                    this.mqtt.publish(topic, null, {retain: true, qos: 1}, this.discoveryTopic, false, false);
-                    clearedEntities.add(entity);
-                }
-            });
+        logger.debug(`Clearing Home Assistant scene discovery topics for '${data.entity.name}'`);
+        this.discovered[this.getDiscoverKey(data.entity)]?.topics.forEach((topic) => {
+            if (topic.startsWith('scene')) {
+                this.mqtt.publish(topic, null, {retain: true, qos: 1}, this.discoveryTopic, false, false);
+            }
         });
 
         // Make sure Home Assistant deletes the old entity first otherwise another one (_2) is created
@@ -1634,11 +1685,9 @@ export default class HomeAssistant extends Extension {
         logger.debug(`Finished clearing scene discovery topics, waiting for Home Assistant.`);
         await utils.sleep(2);
 
-        // Re-discover all entities (including their new scenes).
+        // Re-discover entity (including any new scenes).
         logger.debug(`Re-discovering entities with their scenes.`);
-        clearedEntities.forEach((entity) => {
-            this.discover(entity, true);
-        });
+        this.discover(data.entity, true);
     }
 
     private getDevicePayload(entity: Device | Group | Bridge): KeyValue {

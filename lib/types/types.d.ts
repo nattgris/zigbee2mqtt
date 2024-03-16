@@ -90,6 +90,7 @@ declare global {
         type DeviceInterview = { device: Device, status: 'started' | 'successful' | 'failed' };
         type DeviceJoined = { device: Device };
         type EntityOptionsChanged = { entity: Device | Group, from: KeyValue, to: KeyValue };
+        type ExposesChanged = { device: Device };
         type Reconfigure = { device: Device };
         type DeviceLeave = { ieeeAddr: string, name: string };
         type GroupMembersChanged = {group: Group, action: 'remove' | 'add' | 'remove_all',
@@ -106,6 +107,7 @@ declare global {
             data: KeyValue | Array<string | number>;
             meta: {zclTransactionSequenceNumber?: number; manufacturerCode?: number; frameControl?: ZHFrameControl;};
         };
+        type ScenesChanged = { entity: Device | Group };
     }
 
     // Settings
@@ -141,7 +143,7 @@ declare global {
         serial: {
             disable_led: boolean,
             port?: string,
-            adapter?: 'deconz' | 'zstack' | 'ezsp' | 'zigate',
+            adapter?: 'deconz' | 'zstack' | 'ezsp' | 'zigate' | 'ember',
             baudrate?: number,
             rtscts?: boolean,
         },
