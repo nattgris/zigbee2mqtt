@@ -26,6 +26,10 @@ objectAssignDeep(schema, schemaJson);
     delete schemaJson.properties.ban;
 }
 
+/** NOTE: by order of priority, lower index is lower level (more important) */
+export const LOG_LEVELS: readonly string[] = ['error', 'warning', 'info', 'debug'] as const;
+export type LogLevel = typeof LOG_LEVELS[number];
+
 // DEPRECATED ZIGBEE2MQTT_CONFIG: https://github.com/Koenkk/zigbee2mqtt/issues/4697
 const file = process.env.ZIGBEE2MQTT_CONFIG ?? data.joinPath('configuration.yaml');
 const ajvSetting = new Ajv({allErrors: true}).addKeyword('requiresRestart').compile(schemaJson);
@@ -80,9 +84,12 @@ const defaults: RecursivePartial<Settings> = {
         log_symlink_current: false,
         log_output: ['console', 'file'],
         log_directory: path.join(data.getPath(), 'log', '%TIMESTAMP%'),
-        log_file: 'log.txt',
+        log_file: 'log.log',
         log_level: /* istanbul ignore next */ process.env.DEBUG ? 'debug' : 'info',
+        log_namespaced_levels: {},
         log_syslog: {},
+        log_debug_to_mqtt_frontend: false,
+        log_debug_namespace_ignore: '',
         pan_id: 0x1a62,
         ext_pan_id: [0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD],
         channel: 11,
@@ -182,6 +189,10 @@ function loadSettingsWithDefaults(): void {
     if (_settings.experimental?.hasOwnProperty('output') && _settings.advanced?.output == null) {
         // @ts-ignore
         _settingsWithDefaults.advanced.output = _settings.experimental.output;
+    }
+
+    if (_settings.advanced?.log_level === 'warn') {
+        _settingsWithDefaults.advanced.log_level = 'warning';
     }
 
     // @ts-ignore
@@ -469,20 +480,22 @@ export function set(path: string[], value: string | number | boolean | KeyValue)
     write();
 }
 
-export function apply(newSettings: Record<string, unknown>): boolean {
+export function apply(settings: Record<string, unknown>): boolean {
+    getInternalSettings(); // Ensure _settings is initialized.
+    /* eslint-disable-line */ // @ts-ignore
+    const newSettings = objectAssignDeep.noMutate(_settings, settings);
+    utils.removeNullPropertiesFromObject(newSettings);
     ajvSetting(newSettings);
     const errors = ajvSetting.errors && ajvSetting.errors.filter((e) => e.keyword !== 'required');
-    if (errors.length) {
+    if (errors?.length) {
         const error = errors[0];
         throw new Error(`${error.instancePath.substring(1)} ${error.message}`);
     }
 
-    getInternalSettings(); // Ensure _settings is initialized.
-    /* eslint-disable-line */ // @ts-ignore
-    _settings = objectAssignDeep.noMutate(_settings, newSettings);
+    _settings = newSettings;
     write();
 
-    ajvRestartRequired(newSettings);
+    ajvRestartRequired(settings);
     const restartRequired = ajvRestartRequired.errors &&
         !!ajvRestartRequired.errors.find((e) => e.keyword === 'requiresRestart');
     return restartRequired;

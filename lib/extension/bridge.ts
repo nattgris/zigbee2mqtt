@@ -13,6 +13,9 @@ import data from '../util/data';
 import JSZip from 'jszip';
 import fs from 'fs';
 import * as zhc from 'zigbee-herdsman-converters';
+import {CustomClusters, ClusterDefinition, ClusterName} from 'zigbee-herdsman/dist/zspec/zcl/definition/tstype';
+import {Clusters} from 'zigbee-herdsman/dist/zspec/zcl/definition/cluster';
+import winston from 'winston';
 
 const requestRegex = new RegExp(`${settings.get().mqtt.base_topic}/bridge/request/(.*)`);
 
@@ -28,6 +31,8 @@ export default class Bridge extends Extension {
     private coordinatorVersion: zh.CoordinatorVersion;
     private restartRequired = false;
     private lastJoinedDeviceIeeeAddr: string;
+    private lastBridgeLoggingPayload: string;
+    private logTransport: winston.transport;
     private requestLookup: {[key: string]: (message: KeyValue | string) => Promise<MQTTResponse>};
 
     override async start(): Promise<void> {
@@ -35,6 +40,7 @@ export default class Bridge extends Extension {
             'device/options': this.deviceOptions,
             'device/configure_reporting': this.deviceConfigureReporting,
             'device/remove': this.deviceRemove,
+            'device/interview': this.deviceInterview,
             'device/generate_external_definition': this.deviceGenerateExternalDefinition,
             'device/rename': this.deviceRename,
             'group/add': this.groupAdd,
@@ -58,16 +64,41 @@ export default class Bridge extends Extension {
             'config/log_level': this.configLogLevel,
         };
 
-        const mqtt = this.mqtt;
-        class EventTransport extends Transport {
-            log(info: {message: string, level: string}, callback: () => void): void {
-                const payload = stringify({message: info.message, level: info.level});
-                mqtt.publish(`bridge/logging`, payload, {}, settings.get().mqtt.base_topic, true);
-                callback();
+        const debugToMQTTFrontend = settings.get().advanced.log_debug_to_mqtt_frontend;
+        const baseTopic = settings.get().mqtt.base_topic;
+
+        const bridgeLogging = (message: string, level: string, namespace: string): void => {
+            const payload = stringify({message, level, namespace});
+
+            if (payload !== this.lastBridgeLoggingPayload) {
+                this.lastBridgeLoggingPayload = payload;
+                this.mqtt.publish(`bridge/logging`, payload, {}, baseTopic, true);
             }
+        };
+
+        if (debugToMQTTFrontend) {
+            class DebugEventTransport extends Transport {
+                log(info: {message: string, level: string, namespace: string}, next: () => void): void {
+                    bridgeLogging(info.message, info.level, info.namespace);
+                    next();
+                }
+            }
+
+            this.logTransport = new DebugEventTransport();
+        } else {
+            class EventTransport extends Transport {
+                log(info: {message: string, level: string, namespace: string}, next: () => void): void {
+                    if (info.level !== 'debug') {
+                        bridgeLogging(info.message, info.level, info.namespace);
+                    }
+                    next();
+                }
+            }
+
+            this.logTransport = new EventTransport();
         }
 
-        logger.addTransport(new EventTransport());
+        logger.addTransport(this.logTransport);
 
         this.zigbee2mqttVersion = await utils.getZigbee2MQTTVersion();
         this.zigbeeHerdsmanVersion = await utils.getDependencyVersion('zigbee-herdsman');
@@ -76,7 +107,9 @@ export default class Bridge extends Extension {
 
         this.eventBus.onEntityRenamed(this, () => this.publishInfo());
         this.eventBus.onGroupMembersChanged(this, () => this.publishGroups());
-        this.eventBus.onDevicesChanged(this, () => this.publishDevices() && this.publishInfo());
+        this.eventBus.onDevicesChanged(this, () => this.publishDevices() &&
+                                                    this.publishInfo() &&
+                                                    this.publishDefinitions());
         this.eventBus.onPermitJoinChanged(this, () => !this.zigbee.isStopping() && this.publishInfo());
         this.eventBus.onScenesChanged(this, () => {
             this.publishDevices();
@@ -93,6 +126,7 @@ export default class Bridge extends Extension {
         });
         this.eventBus.onDeviceLeave(this, (data) => {
             this.publishDevices();
+            this.publishDefinitions();
             publishEvent('device_leave', {ieee_address: data.ieeeAddr, friendly_name: data.name});
         });
         this.eventBus.onDeviceNetworkAddressChanged(this, () => this.publishDevices());
@@ -114,8 +148,14 @@ export default class Bridge extends Extension {
         await this.publishInfo();
         await this.publishDevices();
         await this.publishGroups();
+        await this.publishDefinitions();
 
         this.eventBus.onMQTTMessage(this, this.onMQTTMessage);
+    }
+
+    override async stop(): Promise<void> {
+        super.stop();
+        logger.removeTransport(this.logTransport);
     }
 
     @bind async onMQTTMessage(data: eventdata.MQTTMessage): Promise<void> {
@@ -153,21 +193,29 @@ export default class Bridge extends Extension {
             throw new Error(`Invalid payload`);
         }
 
-        const newSettings = utils.computeSettingsToChange(settings.get(), message.options);
+        const newSettings = message.options;
         const restartRequired = settings.apply(newSettings);
         if (restartRequired) this.restartRequired = true;
 
         // Apply some settings on-the-fly.
-        if (newSettings.hasOwnProperty('permit_join')) {
-            await this.zigbee.permitJoin(newSettings.permit_join);
+        if (newSettings.permit_join != undefined) {
+            await this.zigbee.permitJoin(settings.get().permit_join);
         }
 
-        if (newSettings.hasOwnProperty('homeassistant')) {
-            await this.enableDisableExtension(newSettings.homeassistant, 'HomeAssistant');
+        if (newSettings.homeassistant != undefined) {
+            await this.enableDisableExtension(!!settings.get().homeassistant, 'HomeAssistant');
         }
 
-        if (newSettings.hasOwnProperty('advanced') && newSettings.advanced.hasOwnProperty('log_level')) {
-            logger.setLevel(newSettings.advanced.log_level);
+        if (newSettings.advanced?.log_level != undefined) {
+            logger.setLevel(settings.get().advanced.log_level);
+        }
+
+        if (newSettings.advanced?.log_namespaced_levels != undefined) {
+            logger.setNamespacedLevels(settings.get().advanced.log_namespaced_levels);
+        }
+
+        if (newSettings.advanced?.log_debug_namespace_ignore != undefined) {
+            logger.setDebugNamespaceIgnore(settings.get().advanced.log_debug_namespace_ignore);
         }
 
         logger.info('Successfully changed options');
@@ -321,10 +369,9 @@ export default class Bridge extends Extension {
 
     // Deprecated
     @bind async configLogLevel(message: KeyValue | string): Promise<MQTTResponse> {
-        const allowed = ['error', 'warn', 'info', 'debug'];
-        const value = this.getValue(message) as 'error' | 'warn' | 'info' | 'debug';
-        if (typeof value !== 'string' || !allowed.includes(value)) {
-            throw new Error(`'${value}' is not an allowed value, allowed: ${allowed}`);
+        const value = this.getValue(message) as settings.LogLevel;
+        if (typeof value !== 'string' || !settings.LOG_LEVELS.includes(value)) {
+            throw new Error(`'${value}' is not an allowed value, allowed: ${settings.LOG_LEVELS}`);
         }
 
         logger.setLevel(value);
@@ -404,11 +451,8 @@ export default class Bridge extends Extension {
 
         const ID = message.id;
         const entity = this.getEntity(entityType, ID);
-        const currentOptions = entityType === 'device' ? settings.get().devices[entity.ID] :
-            settings.get().groups[entity.ID];
-        const options = utils.computeSettingsToChange(currentOptions, message.options);
         const oldOptions = objectAssignDeep({}, cleanup(entity.options));
-        const restartRequired = settings.changeEntityOptions(ID, options);
+        const restartRequired = settings.changeEntityOptions(ID, message.options);
         if (restartRequired) this.restartRequired = true;
         const newOptions = cleanup(entity.options);
         await this.publishInfo();
@@ -455,6 +499,25 @@ export default class Bridge extends Extension {
             minimum_report_interval: message.minimum_report_interval, reportable_change: message.reportable_change,
             attribute: message.attribute,
         }, null);
+    }
+
+    @bind async deviceInterview(message: string | KeyValue): Promise<MQTTResponse> {
+        if (typeof message !== 'object' || !message.hasOwnProperty('id')) {
+            throw new Error(`Invalid payload`);
+        }
+
+        const device = this.getEntity('device', message.id) as Device;
+
+        try {
+            await device.zh.interview();
+        } catch (error) {
+            throw new Error(`interview of '${device.name}' (${device.ieeeAddr}) failed: ${error}`, {cause: error});
+        }
+
+        // publish devices so that the front-end has up-to-date info.
+        await this.publishDevices();
+
+        return utils.getResponse(message, {id: message.id}, null);
     }
 
     @bind async deviceGenerateExternalDefinition(message: string | KeyValue): Promise<MQTTResponse> {
@@ -577,6 +640,8 @@ export default class Bridge extends Extension {
             if (entity instanceof Device) {
                 this.publishGroups();
                 this.publishDevices();
+                // Refresh Cluster definition
+                this.publishDefinitions();
                 return utils.getResponse(message, {id: ID, block, force}, null);
             } else {
                 this.publishGroups();
@@ -705,6 +770,27 @@ export default class Bridge extends Extension {
             'bridge/groups', stringify(groups), {retain: true, qos: 0}, settings.get().mqtt.base_topic, true);
     }
 
+    async publishDefinitions(): Promise<void> {
+        interface ClusterDefinitionPayload {
+            clusters: Readonly<Record<ClusterName, Readonly<ClusterDefinition>>>,
+            custom_clusters: {[key: string] : CustomClusters}
+        }
+
+        const data: ClusterDefinitionPayload = {
+            clusters: Clusters,
+            custom_clusters: {},
+        };
+
+        for (const device of this.zigbee.devices()) {
+            if (Object.keys(device.customClusters).length !== 0) {
+                data.custom_clusters[device.ieeeAddr] = device.customClusters;
+            }
+        }
+
+        await this.mqtt.publish('bridge/definitions', stringify(data),
+            {retain: true, qos: 0}, settings.get().mqtt.base_topic, true);
+    }
+
     getDefinitionPayload(device: Device): DefinitionPayload {
         if (!device.definition) return null;
         // @ts-expect-error icon is valid for external definitions
@@ -715,7 +801,7 @@ export default class Bridge extends Extension {
             icon = icon.replace('${model}', utils.sanitizeImageParameter(device.definition.model));
         }
 
-        return {
+        const payload: DefinitionPayload = {
             model: device.definition.model,
             vendor: device.definition.vendor,
             description: device.definition.description,
@@ -724,5 +810,7 @@ export default class Bridge extends Extension {
             options: device.definition.options,
             icon,
         };
+
+        return payload;
     }
 }

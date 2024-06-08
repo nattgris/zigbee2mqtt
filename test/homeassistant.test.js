@@ -15,11 +15,23 @@ describe('HomeAssistant extension', () => {
     let extension;
     let origin;
 
-    let resetExtension = async () => {
+    let resetExtension = async (runTimers=true) => {
         await controller.enableDisableExtension(false, 'HomeAssistant');
         MQTT.publish.mockClear();
         await controller.enableDisableExtension(true, 'HomeAssistant');
         extension = controller.extensions.find((e) => e.constructor.name === 'HomeAssistant');
+        if (runTimers) {
+            jest.runOnlyPendingTimers();
+        }
+    }
+
+    let resetDiscoveryPayloads = (id) => {
+        // Change discovered payload, otherwise it's not re-published because it's the same.
+        Object.values(extension.discovered[id].messages).forEach((m) => m.payload = 'changed');
+    }
+
+    let clearDiscoveredTrigger = (id) => {
+        extension.discovered[id].triggers = new Set();
     }
 
     beforeEach(async () => {
@@ -29,6 +41,7 @@ describe('HomeAssistant extension', () => {
         data.writeEmptyState();
         controller.state.load();
         await resetExtension();
+        await flushPromises();
     });
 
     beforeAll(async () => {
@@ -77,13 +90,11 @@ describe('HomeAssistant extension', () => {
 
     it('Should discover devices and groups', async () => {
         let payload;
-        await flushPromises();
 
         payload = {
             "availability":[{"topic":"zigbee2mqtt/bridge/state"}],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode":true,
             "command_topic":"zigbee2mqtt/ha_discovery_group/set",
             "device":{
                "identifiers":["zigbee2mqtt_1221051039810110150109113116116_9"],
@@ -371,7 +382,6 @@ describe('HomeAssistant extension', () => {
             "availability":[{"topic":"zigbee2mqtt/bridge/state"}],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode": true,
             "supported_color_modes": ["color_temp"],
             "min_mireds": 250,
             "max_mireds": 454,
@@ -381,7 +391,7 @@ describe('HomeAssistant extension', () => {
                     "zigbee2mqtt_0x000b57fffec6a5b2"
                 ],
                 "manufacturer":"IKEA",
-                "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
+                "model":"TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (LED1545G12)",
                 "name":"bulb",
                 "sw_version": null,
                 "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
@@ -410,6 +420,68 @@ describe('HomeAssistant extension', () => {
             { retain: true, qos: 1 },
             expect.any(Function),
         );
+    });
+
+    it('Should not discovery devices which are already discovered', async() => {
+        await resetExtension(false);
+        const topic1 = 'homeassistant/sensor/0x0017880104e45522/humidity/config';
+        const payload1 = stringify({
+            'unit_of_measurement': '%',
+            'device_class': 'humidity',
+            'state_class': 'measurement',
+            'value_template': '{{ value_json.humidity }}',
+            'state_topic': 'zigbee2mqtt/weather_sensor',
+            'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
+            'object_id': 'weather_sensor_humidity',
+            'unique_id': '0x0017880104e45522_humidity_zigbee2mqtt',
+            'origin': origin,
+            'enabled_by_default': true,
+            'device': {
+                'identifiers': ['zigbee2mqtt_0x0017880104e45522'],
+                'name': 'weather_sensor',
+                'sw_version': null,
+                'model': 'Temperature and humidity sensor (WSDCGQ11LM)',
+                'manufacturer': 'Aqara',
+                'via_device': 'zigbee2mqtt_bridge_0x00124b00120144ae',
+            },
+            'availability': [{topic: 'zigbee2mqtt/bridge/state'}],
+        });
+        const topic2 = 'homeassistant/device_automation/0x0017880104e45522/action_double/config';
+        const payload2 = stringify({
+            "automation_type":"trigger",
+            "type":"action",
+            "subtype":"double",
+            "payload":"double",
+            "topic":"zigbee2mqtt/weather_sensor_renamed/action",
+            'origin': origin,
+            "device":{
+                "identifiers":[
+                    "zigbee2mqtt_0x0017880104e45522"
+                ],
+                "name":"weather_sensor_renamed",
+                "sw_version": null,
+                "model":"Temperature and humidity sensor (WSDCGQ11LM)",
+                "manufacturer":"Aqara",
+                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
+            }
+        });
+
+        // Should subscribe to `homeassistant/#` to find out what devices are already discovered.
+        expect(MQTT.subscribe).toHaveBeenCalledWith(`homeassistant/#`);
+
+        // Retained Home Assistant discovery message arrives
+        await MQTT.events.message(topic1, payload1);
+        await MQTT.events.message(topic2, payload2);
+
+        jest.runOnlyPendingTimers();        
+
+        // Should unsubscribe to not receive all messages that are going to be published to `homeassistant/#` again.
+        expect(MQTT.unsubscribe).toHaveBeenCalledWith(`homeassistant/#`);
+
+        expect(MQTT.publish).not.toHaveBeenCalledWith(topic1, expect.anything(), expect.any(Object), expect.any(Function));
+        // Device automation should not be cleared
+        expect(MQTT.publish).not.toHaveBeenCalledWith(topic2, null, expect.any(Object), expect.any(Function));
+        expect(logger.debug).toHaveBeenCalledWith(`Skipping discovery of 'sensor/0x0017880104e45522/humidity/config', already discovered`)
     });
 
     it('Should discover devices with precision', async () => {
@@ -993,9 +1065,9 @@ describe('HomeAssistant extension', () => {
 
     it('Should warn when starting with cache_state false', async () => {
         settings.set(['advanced', 'cache_state'], false);
-        logger.warn.mockClear();
+        logger.warning.mockClear();
         await resetExtension();
-        expect(logger.warn).toHaveBeenCalledWith("In order for Home Assistant integration to work properly set `cache_state: true");
+        expect(logger.warning).toHaveBeenCalledWith("In order for Home Assistant integration to work properly set `cache_state: true");
     });
 
     it('Should set missing values to null', async () => {
@@ -1075,7 +1147,7 @@ describe('HomeAssistant extension', () => {
     });
 
     it('Should discover when not discovered yet', async () => {
-        controller.extensions.find((e) => e.constructor.name === 'HomeAssistant').discovered = {};
+        extension.discovered = {};
         const device = zigbeeHerdsman.devices.WSDCGQ11LM;
         const data = {measuredValue: -85}
         const payload = {data, cluster: 'msTemperatureMeasurement', device, endpoint: device.getEndpoint(1), type: 'attributeReport', linkquality: 10};
@@ -1113,7 +1185,7 @@ describe('HomeAssistant extension', () => {
     });
 
     it('Shouldnt discover when device leaves', async () => {
-        controller.extensions.find((e) => e.constructor.name === 'HomeAssistant').discovered = {};
+        extension.discovered = {};
         const device = zigbeeHerdsman.devices.bulb;
         const payload = {ieeeAddr: device.ieeeAddr};
         MQTT.publish.mockClear();
@@ -1123,6 +1195,7 @@ describe('HomeAssistant extension', () => {
 
     it('Should discover when options change', async () => {
         const device = controller.zigbee.resolveEntity(zigbeeHerdsman.devices.bulb);
+        resetDiscoveryPayloads(device.ieeeAddr);
         MQTT.publish.mockClear();
         controller.eventBus.emitEntityOptionsChanged({entity: device, from: {}, to: {'test': 123}});
         await flushPromises();
@@ -1369,7 +1442,6 @@ describe('HomeAssistant extension', () => {
             "availability":[{"topic":"zigbee2mqtt/bridge/state"}],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode":true,
             "command_topic":"zigbee2mqtt/ha_discovery_group_new/set",
             "device":{
                "identifiers":["zigbee2mqtt_1221051039810110150109113116116_9"],
@@ -1482,7 +1554,7 @@ describe('HomeAssistant extension', () => {
                 ],
                 "name":"bulb",
                 'sw_version': null,
-                "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
+                "model":"TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (LED1545G12)",
                 "manufacturer":"IKEA",
                 "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
             },
@@ -1632,7 +1704,7 @@ describe('HomeAssistant extension', () => {
         );
 
         // Shouldn't rediscover when already discovered in previous session
-        controller.extensions.find((e) => e.constructor.name === 'HomeAssistant')._clearDiscoveredTrigger();
+        clearDiscoveredTrigger('0x0017880104e45520');
         await MQTT.events.message('homeassistant/device_automation/0x0017880104e45520/action_double/config', stringify({topic: 'zigbee2mqtt/button/action'}));
         await MQTT.events.message('homeassistant/device_automation/0x0017880104e45520/action_double/config', stringify({topic: 'zigbee2mqtt/button/action'}));
         await flushPromises();
@@ -1643,7 +1715,7 @@ describe('HomeAssistant extension', () => {
         expect(MQTT.publish).not.toHaveBeenCalledWith('homeassistant/device_automation/0x0017880104e45520/action_double/config', expect.any(String), expect.any(Object), expect.any(Function));
 
         // Should rediscover when already discovered in previous session but with different name
-        controller.extensions.find((e) => e.constructor.name === 'HomeAssistant')._clearDiscoveredTrigger();
+        clearDiscoveredTrigger('0x0017880104e45520');
         await MQTT.events.message('homeassistant/device_automation/0x0017880104e45520/action_double/config', stringify({topic: 'zigbee2mqtt/button_other_name/action'}));
         await flushPromises();
         MQTT.publish.mockClear();
@@ -1908,6 +1980,7 @@ describe('HomeAssistant extension', () => {
     });
 
     it('Should rediscover group when device is added to it', async () => {
+        resetDiscoveryPayloads(9);
         MQTT.publish.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/request/group/members/add', stringify({group: 'ha_discovery_group', device: 'wall_switch_double/left'}));
         await flushPromises();
@@ -1916,7 +1989,6 @@ describe('HomeAssistant extension', () => {
             "availability":[{"topic":"zigbee2mqtt/bridge/state"}],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode":true,
             "command_topic":"zigbee2mqtt/ha_discovery_group/set",
             "device":{
                "identifiers":["zigbee2mqtt_1221051039810110150109113116116_9"],
@@ -1970,7 +2042,6 @@ describe('HomeAssistant extension', () => {
             "availability":[{"topic":"zigbee2mqtt/bridge/state","value_template":'{{ value_json.state }}'}],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode":true,
             "command_topic":"zigbee2mqtt/ha_discovery_group/set",
             "device":{
                "identifiers":["zigbee2mqtt_1221051039810110150109113116116_9"],
@@ -2030,14 +2101,13 @@ describe('HomeAssistant extension', () => {
             ],
             "brightness":true,
             "brightness_scale":254,
-            "color_mode":true,
             "command_topic":"zigbee2mqtt/bulb/set",
             "device":{
                "identifiers":[
                   "zigbee2mqtt_0x000b57fffec6a5b2"
                ],
                "manufacturer":"IKEA",
-               "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
+               "model":"TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (LED1545G12)",
                "name":"bulb",
                "sw_version":null,
                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
@@ -2088,7 +2158,7 @@ describe('HomeAssistant extension', () => {
                   "zigbee2mqtt_0x000b57fffec6a5b2"
                ],
                "manufacturer":"IKEA",
-               "model":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)",
+               "model":"TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (LED1545G12)",
                "name":"bulb",
                "sw_version": null,
                "via_device": "zigbee2mqtt_bridge_0x00124b00120144ae",
@@ -2154,9 +2224,9 @@ describe('HomeAssistant extension', () => {
     });
 
     it('Should rediscover scenes when a scene is changed', async () => {
-
         // Device/endpoint scenes.
         const device = controller.zigbee.resolveEntity(zigbeeHerdsman.devices.bulb_color_2);
+        resetDiscoveryPayloads(device.ieeeAddr);
 
         MQTT.publish.mockClear();
         controller.eventBus.emitScenesChanged({entity: device});
@@ -2200,6 +2270,7 @@ describe('HomeAssistant extension', () => {
 
         // Group scenes.
         const group = controller.zigbee.resolveEntity('ha_discovery_group');
+        resetDiscoveryPayloads(9);
 
         MQTT.publish.mockClear();
         controller.eventBus.emitScenesChanged({entity: group});
@@ -2369,7 +2440,7 @@ describe('HomeAssistant extension', () => {
             'command_topic': 'zigbee2mqtt/bridge/request/options',
             'command_template':
                 '{"options": {"advanced": {"log_level": "{{ value }}" } } }',
-            'options': ['info', 'warn', 'error', 'debug'],
+            'options': settings.LOG_LEVELS,
             'origin': origin,
             'device': devicePayload,
             'availability': [{'topic': 'zigbee2mqtt/bridge/state'}],
@@ -2508,7 +2579,8 @@ describe('HomeAssistant extension', () => {
         MQTT.publish.mockClear();
         const device = zigbeeHerdsman.devices['BMCT-SLZ'];
         const data = {deviceMode: 0}
-        const msg = {data, cluster: 'manuSpecificBosch10', device, endpoint: device.getEndpoint(1), type: 'attributeReport', linkquality: 10};
+        const msg = {data, cluster: 'boschSpecific', device, endpoint: device.getEndpoint(1), type: 'attributeReport', linkquality: 10};
+        resetDiscoveryPayloads('0x18fc26000000cafe');
         await zigbeeHerdsman.events.message(msg);
         const payload = {
             'availability':[{'topic':'zigbee2mqtt/bridge/state'}],

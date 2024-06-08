@@ -8,7 +8,8 @@ import utils from './util/utils';
 import stringify from 'json-stable-stringify-without-jsonify';
 import assert from 'assert';
 import bind from 'bind-decorator';
-import * as zhc from 'zigbee-herdsman-converters';
+import {setLogger as zhcSetLogger} from 'zigbee-herdsman-converters';
+import {setLogger as zhSetLogger} from 'zigbee-herdsman';
 
 // Extensions
 import ExtensionFrontend from './extension/frontend';
@@ -60,6 +61,8 @@ export class Controller {
 
     constructor(restartCallback: () => void, exitCallback: (code: number, restart: boolean) => void) {
         logger.init();
+        zhSetLogger(logger);
+        zhcSetLogger(logger);
         this.eventBus = new EventBus();
         this.zigbee = new Zigbee(this.eventBus);
         this.mqtt = new MQTT(this.eventBus);
@@ -72,6 +75,7 @@ export class Controller {
             this.enableDisableExtension, this.restartCallback, this.addExtension];
 
         this.extensions = [
+            new ExtensionOnEvent(...this.extensionArgs),
             new ExtensionBridge(...this.extensionArgs),
             new ExtensionPublish(...this.extensionArgs),
             new ExtensionReceive(...this.extensionArgs),
@@ -80,7 +84,6 @@ export class Controller {
             new ExtensionNetworkMap(...this.extensionArgs),
             new ExtensionGroups(...this.extensionArgs),
             new ExtensionBind(...this.extensionArgs),
-            new ExtensionOnEvent(...this.extensionArgs),
             new ExtensionOTAUpdate(...this.extensionArgs),
             new ExtensionReport(...this.extensionArgs),
             new ExtensionExternalExtension(...this.extensionArgs),
@@ -92,13 +95,10 @@ export class Controller {
             /* istanbul ignore next */
             settings.get().advanced.soft_reset_timeout !== 0 && new ExtensionSoftReset(...this.extensionArgs),
         ].filter((n) => n);
-
-        zhc.setLogger(logger);
     }
 
     async start(): Promise<void> {
         this.state.start();
-        logger.logOutput();
 
         const info = await utils.getZigbee2MQTTVersion();
         logger.info(`Starting Zigbee2MQTT version ${info.version} (commit #${info.commitHash})`);
@@ -138,9 +138,9 @@ export class Controller {
         // Enable zigbee join
         try {
             if (settings.get().permit_join) {
-                logger.warn('`permit_join` set to  `true` in configuration.yaml.');
-                logger.warn('Allowing new devices to join.');
-                logger.warn('Set `permit_join` to `false` once you joined all devices.');
+                logger.warning('`permit_join` set to  `true` in configuration.yaml.');
+                logger.warning('Allowing new devices to join.');
+                logger.warning('Set `permit_join` to `false` once you joined all devices.');
             }
 
             await this.zigbee.permitJoin(settings.get().permit_join);

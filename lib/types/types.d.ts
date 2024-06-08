@@ -1,4 +1,5 @@
 /* eslint-disable camelcase */
+import {LogLevel} from 'lib/util/settings';
 import type {
     Device as ZHDevice,
     Group as ZHGroup,
@@ -15,11 +16,8 @@ import type {
 
 import type {
     Cluster as ZHCluster,
-} from 'zigbee-herdsman/dist/zcl/tstype';
-
-import type {
     FrameControl as ZHFrameControl,
-} from 'zigbee-herdsman/dist/zcl';
+} from 'zigbee-herdsman/dist/zspec/zcl/definition/tstype';
 
 import type * as zhc from 'zigbee-herdsman-converters';
 
@@ -194,8 +192,11 @@ declare global {
             log_output: ('console' | 'file' | 'syslog')[],
             log_directory: string,
             log_file: string,
-            log_level: 'debug' | 'info' | 'error' | 'warn',
+            log_level: LogLevel,
+            log_namespaced_levels: Record<string, LogLevel>,
             log_syslog: KeyValue,
+            log_debug_to_mqtt_frontend: boolean,
+            log_debug_namespace_ignore: string,
             pan_id: number | 'GENERATE',
             ext_pan_id: number[] | 'GENERATE',
             channel: number,

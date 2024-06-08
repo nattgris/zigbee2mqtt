@@ -17,6 +17,8 @@ const mocksClear = [
 
 const fs = require('fs');
 
+const LOG_MQTT_NS = 'z2m:mqtt';
+
 jest.mock('sd-notify', () => {
     return {
         watchdogInterval: () => {return 3000;},
@@ -53,13 +55,13 @@ describe('Controller', () => {
 
     it('Start controller', async () => {
         await controller.start();
-        expect(zigbeeHerdsman.constructor).toHaveBeenCalledWith({"network":{"panID":6754,"extendedPanID":[221,221,221,221,221,221,221,221],"channelList":[11],"networkKey":[1,3,5,7,9,11,13,15,0,2,4,6,8,10,12,13]},"databasePath":path.join(data.mockDir, "database.db"), "databaseBackupPath":path.join(data.mockDir, "database.db.backup"),"backupPath":path.join(data.mockDir, "coordinator_backup.json"),"acceptJoiningDeviceHandler": expect.any(Function),adapter: {concurrent: null, delay: null, disableLED: false}, "serialPort":{"baudRate":undefined,"rtscts":undefined,"path":"/dev/dummy"}}, logger);
+        expect(zigbeeHerdsman.constructor).toHaveBeenCalledWith({"network":{"panID":6754,"extendedPanID":[221,221,221,221,221,221,221,221],"channelList":[11],"networkKey":[1,3,5,7,9,11,13,15,0,2,4,6,8,10,12,13]},"databasePath":path.join(data.mockDir, "database.db"), "databaseBackupPath":path.join(data.mockDir, "database.db.backup"),"backupPath":path.join(data.mockDir, "coordinator_backup.json"),"acceptJoiningDeviceHandler": expect.any(Function),adapter: {concurrent: null, delay: null, disableLED: false}, "serialPort":{"baudRate":undefined,"rtscts":undefined,"path":"/dev/dummy"}});
         expect(zigbeeHerdsman.start).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.setTransmitPower).toHaveBeenCalledTimes(0);
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(true, undefined, undefined);
         expect(logger.info).toHaveBeenCalledWith(`Currently ${Object.values(zigbeeHerdsman.devices).length - 1} devices are joined:`)
-        expect(logger.info).toHaveBeenCalledWith('bulb (0x000b57fffec6a5b2): LED1545G12 - IKEA TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (Router)');
+        expect(logger.info).toHaveBeenCalledWith('bulb (0x000b57fffec6a5b2): LED1545G12 - IKEA TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (Router)');
         expect(logger.info).toHaveBeenCalledWith('remote (0x0017880104e45517): 324131092621 - Philips Hue dimmer switch (EndDevice)');
         expect(logger.info).toHaveBeenCalledWith('0x0017880104e45518 (0x0017880104e45518): Not supported (EndDevice)');
         expect(MQTT.connect).toHaveBeenCalledTimes(1);
@@ -161,7 +163,7 @@ describe('Controller', () => {
         logger.error.mockClear();
         controller.mqtt.client.reconnecting = true;
         jest.advanceTimersByTime(11 * 1000);
-        expect(logger.error).toHaveBeenCalledWith("Not connected to MQTT server!");
+        expect(logger.error).toHaveBeenCalledWith("Not connected to MQTT server!", LOG_MQTT_NS);
         controller.mqtt.client.reconnecting = false;
     });
 
@@ -174,8 +176,8 @@ describe('Controller', () => {
         await controller.publishEntityState(device, {state: 'ON', brightness: 50, color_temp: 370, color: {r: 100, g: 50, b: 10}, dummy: {1: 'yes', 2: 'no'}});
         await flushPromises();
         expect(logger.error).toHaveBeenCalledTimes(2);
-        expect(logger.error).toHaveBeenCalledWith("Not connected to MQTT server!");
-        expect(logger.error).toHaveBeenCalledWith("Cannot send message: topic: 'zigbee2mqtt/bulb', payload: '{\"brightness\":50,\"color\":{\"b\":10,\"g\":50,\"r\":100},\"color_temp\":370,\"dummy\":{\"1\":\"yes\",\"2\":\"no\"},\"linkquality\":99,\"state\":\"ON\"}");
+        expect(logger.error).toHaveBeenCalledWith("Not connected to MQTT server!", LOG_MQTT_NS);
+        expect(logger.error).toHaveBeenCalledWith("Cannot send message: topic: 'zigbee2mqtt/bulb', payload: '{\"brightness\":50,\"color\":{\"b\":10,\"g\":50,\"r\":100},\"color_temp\":370,\"dummy\":{\"1\":\"yes\",\"2\":\"no\"},\"linkquality\":99,\"state\":\"ON\"}", LOG_MQTT_NS);
         controller.mqtt.client.reconnecting = false;
     });
 
@@ -215,7 +217,7 @@ describe('Controller', () => {
         });
         await controller.start();
         await flushPromises();
-        expect(logger.error).toHaveBeenCalledWith('MQTT error: addr not found');
+        expect(logger.error).toHaveBeenCalledWith('MQTT error: addr not found', LOG_MQTT_NS);
         expect(logger.error).toHaveBeenCalledWith('MQTT failed to connect, exiting...');
         expect(mockExit).toHaveBeenCalledTimes(1);
         expect(mockExit).toHaveBeenCalledWith(1, false);
@@ -269,14 +271,14 @@ describe('Controller', () => {
         await controller.start();
         logger.debug.mockClear();
         await MQTT.events.message('dummytopic', 'dummymessage');
-        expect(logger.debug).toHaveBeenCalledWith("Received MQTT message on 'dummytopic' with data 'dummymessage'")
+        expect(logger.debug).toHaveBeenCalledWith("Received MQTT message on 'dummytopic' with data 'dummymessage'", LOG_MQTT_NS)
     });
 
     it('Skip MQTT messages on topic we published to', async () => {
         await controller.start();
         logger.debug.mockClear();
         await MQTT.events.message('zigbee2mqtt/skip-this-topic', 'skipped');
-        expect(logger.debug).toHaveBeenCalledWith("Received MQTT message on 'zigbee2mqtt/skip-this-topic' with data 'skipped'")
+        expect(logger.debug).toHaveBeenCalledWith("Received MQTT message on 'zigbee2mqtt/skip-this-topic' with data 'skipped'", LOG_MQTT_NS)
         logger.debug.mockClear();
         await controller.mqtt.publish('skip-this-topic', '', {});
         await MQTT.events.message('zigbee2mqtt/skip-this-topic', 'skipped');
@@ -398,7 +400,7 @@ describe('Controller', () => {
         const payload = {device, status: 'successful'};
         await zigbeeHerdsman.events.deviceInterview(payload);
         await flushPromises();
-        expect(MQTT.publish).toHaveBeenCalledWith('zigbee2mqtt/bridge/log', stringify({"type":"pairing","message":"interview_successful","meta":{"friendly_name":"bulb","model":"LED1545G12","vendor":"IKEA","description":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white","supported":true}}), { retain: false, qos: 0 }, expect.any(Function));
+        expect(MQTT.publish).toHaveBeenCalledWith('zigbee2mqtt/bridge/log', stringify({"type":"pairing","message":"interview_successful","meta":{"friendly_name":"bulb","model":"LED1545G12","vendor":"IKEA","description":"TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm","supported":true}}), { retain: false, qos: 0 }, expect.any(Function));
     });
 
     it('On zigbee deviceInterview successful not supported', async () => {
@@ -665,7 +667,7 @@ describe('Controller', () => {
         MQTT.events['connect']();
         await flushPromises();
         jest.runOnlyPendingTimers();
-        expect(MQTT.publish).toHaveBeenCalledTimes(13);
+        expect(MQTT.publish).toHaveBeenCalledTimes(14);
         expect(MQTT.publish).toHaveBeenCalledWith('zigbee2mqtt/bridge/info', expect.any(String), { retain: true, qos: 0 }, expect.any(Function));
     });
 
