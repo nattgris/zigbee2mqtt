@@ -14,6 +14,7 @@ device_options:
   debounce: 1
   debounce_ignore:
     - action
+  legacy: false
 devices: devices.yaml
 groups: groups.yaml
 advanced:
@@ -47,5 +48,6 @@ advanced:
     port: 123
     protocol: tcp4
     type: '5424'
-  last_seen: ISO_8601_local
+  last_seen: disable
   cache_state_send_on_startup: false
+  legacy_availability_payload: false
