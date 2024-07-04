@@ -1,11 +1,14 @@
-import winston from 'winston';
-import moment from 'moment';
-import * as settings from './settings';
-import path from 'path';
+import assert from 'assert';
 import fs from 'fs';
 import fx from 'mkdir-recursive';
+import moment from 'moment';
+import path from 'path';
 import {rimrafSync} from 'rimraf';
-import assert from 'assert';
+import winston from 'winston';
+
+import * as settings from './settings';
+
+const NAMESPACE_SEPARATOR = ':';
 
 class Logger {
     private level: settings.LogLevel;
@@ -15,6 +18,7 @@ class Logger {
     private fileTransport: winston.transports.FileTransportInstance;
     private debugNamespaceIgnoreRegex?: RegExp;
     private namespacedLevels: Record<string, settings.LogLevel>;
+    private cachedNamespacedLevels: Record<string, settings.LogLevel>;
 
     public init(): void {
         // What transports to enable
@@ -25,20 +29,15 @@ class Logger {
         const logFilename = settings.get().advanced.log_file.replace('%TIMESTAMP%', timestamp);
         this.level = settings.get().advanced.log_level;
         this.namespacedLevels = settings.get().advanced.log_namespaced_levels;
+        this.cachedNamespacedLevels = Object.assign({}, this.namespacedLevels);
 
-        assert(
-            settings.LOG_LEVELS.includes(this.level),
-            `'${this.level}' is not valid log_level, use one of '${settings.LOG_LEVELS.join(', ')}'`,
-        );
+        assert(settings.LOG_LEVELS.includes(this.level), `'${this.level}' is not valid log_level, use one of '${settings.LOG_LEVELS.join(', ')}'`);
 
         const timestampFormat = (): string => moment().format(settings.get().advanced.timestamp_format);
 
         this.logger = winston.createLogger({
             level: 'debug',
-            format: winston.format.combine(
-                winston.format.errors({stack: true}),
-                winston.format.timestamp({format: timestampFormat}),
-            ),
+            format: winston.format.combine(winston.format.errors({stack: true}), winston.format.timestamp({format: timestampFormat})),
             levels: winston.config.syslog.levels,
         });
 
@@ -47,16 +46,20 @@ class Logger {
         let logging = `Logging to console${consoleSilenced ? ' (silenced)' : ''}`;
 
         // Setup default console logger
-        this.logger.add(new winston.transports.Console({
-            silent: consoleSilenced,
-            // winston.config.syslog.levels sets 'warning' as 'red'
-            format: winston.format.combine(
-                winston.format.colorize({colors: {debug: 'blue', info: 'green', warning: 'yellow', error: 'red'}}),
-                winston.format.printf(/* istanbul ignore next */(info) => {
-                    return `[${info.timestamp}] ${info.level}: \t${info.namespace}: ${info.message}`;
-                }),
-            ),
-        }));
+        this.logger.add(
+            new winston.transports.Console({
+                silent: consoleSilenced,
+                // winston.config.syslog.levels sets 'warning' as 'red'
+                format: winston.format.combine(
+                    winston.format.colorize({colors: {debug: 'blue', info: 'green', warning: 'yellow', error: 'red'}}),
+                    winston.format.printf(
+                        /* istanbul ignore next */ (info) => {
+                            return `[${info.timestamp}] ${info.level}: \t${info.message}`;
+                        },
+                    ),
+                ),
+            }),
+        );
 
         if (this.output.includes('file')) {
             logging += `, file (filename: ${logFilename})`;
@@ -75,13 +78,14 @@ class Logger {
             }
 
             // Add file logger when enabled
-            // eslint-disable-next-line max-len
             // NOTE: the initiation of the logger even when not added as transport tries to create the logging directory
             const transportFileOptions: winston.transports.FileTransportOptions = {
                 filename: path.join(this.directory, logFilename),
-                format: winston.format.printf(/* istanbul ignore next */(info) => {
-                    return `[${info.timestamp}] ${info.level}: \t${info.namespace}: ${info.message}`;
-                }),
+                format: winston.format.printf(
+                    /* istanbul ignore next */ (info) => {
+                        return `[${info.timestamp}] ${info.level}: \t${info.message}`;
+                    },
+                ),
             };
 
             if (settings.get().advanced.log_rotation) {
@@ -102,9 +106,6 @@ class Logger {
 
             const options: KeyValue = {
                 app_name: 'Zigbee2MQTT',
-                format: winston.format.printf(/* istanbul ignore next */(info) => {
-                    return `${info.namespace}: ${info.message}`;
-                }),
                 ...settings.get().advanced.log_syslog,
             };
 
@@ -134,7 +135,7 @@ class Logger {
     }
 
     public getDebugNamespaceIgnore(): string {
-        return this.debugNamespaceIgnoreRegex?.toString().slice(1, -1)/* remove slashes */ ?? '';
+        return this.debugNamespaceIgnoreRegex?.toString().slice(1, -1) /* remove slashes */ ?? '';
     }
 
     public setDebugNamespaceIgnore(value: string): void {
@@ -147,6 +148,7 @@ class Logger {
 
     public setLevel(level: settings.LogLevel): void {
         this.level = level;
+        this.resetCachedNamespacedLevels();
     }
 
     public getNamespacedLevels(): Record<string, settings.LogLevel> {
@@ -155,13 +157,35 @@ class Logger {
 
     public setNamespacedLevels(nsLevels: Record<string, settings.LogLevel>): void {
         this.namespacedLevels = nsLevels;
+        this.resetCachedNamespacedLevels();
+    }
+
+    private resetCachedNamespacedLevels(): void {
+        this.cachedNamespacedLevels = Object.assign({}, this.namespacedLevels);
+    }
+
+    private cacheNamespacedLevel(namespace: string): string {
+        let cached = namespace;
+
+        while (this.cachedNamespacedLevels[namespace] == undefined) {
+            const sep = cached.lastIndexOf(NAMESPACE_SEPARATOR);
+
+            if (sep === -1) {
+                return (this.cachedNamespacedLevels[namespace] = this.level);
+            }
+
+            cached = cached.slice(0, sep);
+            this.cachedNamespacedLevels[namespace] = this.cachedNamespacedLevels[cached];
+        }
+
+        return this.cachedNamespacedLevels[namespace];
     }
 
     private log(level: settings.LogLevel, message: string, namespace: string): void {
-        const nsLevel = this.namespacedLevels[namespace] ?? this.level;
+        const nsLevel = this.cacheNamespacedLevel(namespace);
 
         if (settings.LOG_LEVELS.indexOf(level) <= settings.LOG_LEVELS.indexOf(nsLevel)) {
-            this.logger.log(level, message, {namespace});
+            this.logger.log(level, `${namespace}: ${message}`);
         }
     }
 

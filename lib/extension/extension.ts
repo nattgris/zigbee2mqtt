@@ -5,7 +5,7 @@ abstract class Extension {
     protected publishEntityState: PublishEntityState;
     protected eventBus: EventBus;
     protected enableDisableExtension: (enable: boolean, name: string) => Promise<void>;
-    protected restartCallback: () => void;
+    protected restartCallback: () => Promise<void>;
     protected addExtension: (extension: Extension) => Promise<void>;
 
     /**
@@ -20,9 +20,16 @@ abstract class Extension {
      * @param {restartCallback} restartCallback Restart Zigbee2MQTT
      * @param {addExtension} addExtension Add an extension
      */
-    constructor(zigbee: Zigbee, mqtt: MQTT, state: State, publishEntityState: PublishEntityState,
-        eventBus: EventBus, enableDisableExtension: (enable: boolean, name: string) => Promise<void>,
-        restartCallback: () => void, addExtension: (extension: Extension) => Promise<void>) {
+    constructor(
+        zigbee: Zigbee,
+        mqtt: MQTT,
+        state: State,
+        publishEntityState: PublishEntityState,
+        eventBus: EventBus,
+        enableDisableExtension: (enable: boolean, name: string) => Promise<void>,
+        restartCallback: () => Promise<void>,
+        addExtension: (extension: Extension) => Promise<void>,
+    ) {
         this.zigbee = zigbee;
         this.mqtt = mqtt;
         this.state = state;

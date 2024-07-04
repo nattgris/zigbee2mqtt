@@ -1,11 +1,12 @@
-import * as settings from '../util/settings';
-import utils from '../util/utils';
-import logger from '../util/logger';
+import bind from 'bind-decorator';
 import stringify from 'json-stable-stringify-without-jsonify';
 import * as zhc from 'zigbee-herdsman-converters';
-import Extension from './extension';
-import bind from 'bind-decorator';
+
 import Device from '../model/device';
+import logger from '../util/logger';
+import * as settings from '../util/settings';
+import utils from '../util/utils';
+import Extension from './extension';
 
 /**
  * This extension calls the zigbee-herdsman-converters definition configure() method
@@ -39,7 +40,7 @@ export default class Configure extends Extension {
                 return;
             }
 
-            this.configure(device, 'mqtt_message', true);
+            await this.configure(device, 'mqtt_message', true);
         } else if (data.topic === this.topic) {
             const message = utils.parseJSON(data.message, data.message);
             const ID = typeof message === 'object' && message.hasOwnProperty('id') ? message.id : message;
@@ -75,13 +76,13 @@ export default class Configure extends Extension {
             }
         });
 
-        this.eventBus.onDeviceJoined(this, (data) => {
+        this.eventBus.onDeviceJoined(this, async (data) => {
             if (data.device.zh.meta.hasOwnProperty('configured')) {
                 delete data.device.zh.meta.configured;
                 data.device.zh.save();
             }
 
-            this.configure(data.device, 'zigbee_event');
+            await this.configure(data.device, 'zigbee_event');
         });
         this.eventBus.onDeviceInterview(this, (data) => this.configure(data.device, 'zigbee_event'));
         this.eventBus.onLastSeenChanged(this, (data) => this.configure(data.device, 'zigbee_event'));
@@ -89,8 +90,12 @@ export default class Configure extends Extension {
         this.eventBus.onReconfigure(this, this.onReconfigure);
     }
 
-    private async configure(device: Device, event: 'started' | 'zigbee_event' | 'reporting_disabled' | 'mqtt_message',
-        force=false, throwError=false): Promise<void> {
+    private async configure(
+        device: Device,
+        event: 'started' | 'zigbee_event' | 'reporting_disabled' | 'mqtt_message',
+        force = false,
+        throwError = false,
+    ): Promise<void> {
         if (!force) {
             if (device.options.disabled || !device.definition?.configure || !device.zh.interviewCompleted) {
                 return;
