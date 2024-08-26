@@ -20,15 +20,7 @@ groups: groups.yaml
 advanced:
   availability_timeout: 60
   pan_id: 65115
-  ext_pan_id:
-    - 88
-    - 51
-    - 191
-    - 55
-    - 133
-    - 152
-    - 207
-    - 132
+  ext_pan_id: [0x84, 0xcf, 0x98, 0x85, 0x37, 0xbf, 0x33, 0x58]
   channel: 11
   network_key: '!secret network_key'
   log_level: warn
