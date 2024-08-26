@@ -1,4 +1,4 @@
-FROM node:12-alpine as base
+FROM node:22-alpine as base
 
 WORKDIR /app
 RUN apk add --no-cache tzdata eudev
