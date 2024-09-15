@@ -2,6 +2,7 @@ import * as zhc from 'zigbee-herdsman-converters';
 
 import logger from '../../util/logger';
 import * as settings from '../../util/settings';
+import utils from '../../util/utils';
 import Extension from '../extension';
 
 const defaultConfiguration = {
@@ -106,9 +107,11 @@ export default class Report extends Extension {
                             }
                         }
 
-                        this.enabled
-                            ? await ep.bind(cluster, this.zigbee.firstCoordinatorEndpoint())
-                            : await ep.unbind(cluster, this.zigbee.firstCoordinatorEndpoint());
+                        if (this.enabled) {
+                            await ep.bind(cluster, this.zigbee.firstCoordinatorEndpoint());
+                        } else {
+                            await ep.unbind(cluster, this.zigbee.firstCoordinatorEndpoint());
+                        }
 
                         await ep.configureReporting(cluster, items);
                         logger.info(`Successfully ${term2} reporting for '${device.ieeeAddr}' - ${ep.ID} - ${cluster}`);
@@ -176,7 +179,7 @@ export default class Report extends Extension {
     }
 
     override async start(): Promise<void> {
-        for (const device of this.zigbee.devices(false)) {
+        for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
             if (this.shouldSetupReporting(device, null)) {
                 await this.setupReporting(device);
             }

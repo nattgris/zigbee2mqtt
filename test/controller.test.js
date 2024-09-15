@@ -66,6 +66,7 @@ describe('Controller', () => {
     });
 
     it('Start controller', async () => {
+        settings.set(['advanced', 'transmit_power'], 14);
         await controller.start();
         expect(zigbeeHerdsman.constructor).toHaveBeenCalledWith({
             network: {
@@ -78,14 +79,14 @@ describe('Controller', () => {
             databaseBackupPath: path.join(data.mockDir, 'database.db.backup'),
             backupPath: path.join(data.mockDir, 'coordinator_backup.json'),
             acceptJoiningDeviceHandler: expect.any(Function),
-            adapter: {concurrent: null, delay: null, disableLED: false},
+            adapter: {concurrent: null, delay: null, disableLED: false, transmitPower: 14},
             serialPort: {baudRate: undefined, rtscts: undefined, path: '/dev/dummy'},
         });
         expect(zigbeeHerdsman.start).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.setTransmitPower).toHaveBeenCalledTimes(0);
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(true, undefined, undefined);
-        expect(logger.info).toHaveBeenCalledWith(`Currently ${Object.values(zigbeeHerdsman.devices).length - 1} devices are joined:`);
+        expect(logger.info).toHaveBeenCalledWith(`Currently ${Object.values(zigbeeHerdsman.devices).length - 1} devices are joined.`);
         expect(logger.info).toHaveBeenCalledWith(
             'bulb (0x000b57fffec6a5b2): LED1545G12 - IKEA TRADFRI bulb E26/E27, white spectrum, globe, opal, 980 lm (Router)',
         );
@@ -277,7 +278,7 @@ describe('Controller', () => {
         await controller.start();
         await flushPromises();
         expect(logger.error).toHaveBeenCalledWith('MQTT error: addr not found');
-        expect(logger.error).toHaveBeenCalledWith('MQTT failed to connect, exiting...');
+        expect(logger.error).toHaveBeenCalledWith('MQTT failed to connect, exiting... (addr not found)');
         expect(mockExit).toHaveBeenCalledTimes(1);
         expect(mockExit).toHaveBeenCalledWith(1, false);
     });
@@ -287,13 +288,6 @@ describe('Controller', () => {
         await controller.start();
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(false, undefined, undefined);
-    });
-
-    it('Start controller with transmit power', async () => {
-        settings.set(['experimental', 'transmit_power'], 14);
-        await controller.start();
-        expect(zigbeeHerdsman.setTransmitPower).toHaveBeenCalledTimes(1);
-        expect(zigbeeHerdsman.setTransmitPower).toHaveBeenCalledWith(14);
     });
 
     it('Start controller and stop with restart', async () => {

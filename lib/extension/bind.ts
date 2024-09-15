@@ -363,7 +363,7 @@ export default class Bind extends Extension {
         if (data.action === 'add') {
             const bindsToGroup: zh.Bind[] = [];
 
-            for (const device of this.zigbee.devices(false)) {
+            for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
                 for (const endpoint of device.zh.endpoints) {
                     for (const bind of endpoint.binds) {
                         if (bind.target === data.group.zh) {
@@ -429,7 +429,7 @@ export default class Bind extends Extension {
                         await endpoint.configureReporting(bind.cluster.name, items);
                         logger.info(`Successfully setup reporting for '${entity}' cluster '${bind.cluster.name}'`);
                     } catch (error) {
-                        logger.warning(`Failed to setup reporting for '${entity}' cluster '${bind.cluster.name}'`);
+                        logger.warning(`Failed to setup reporting for '${entity}' cluster '${bind.cluster.name}' (${error.message})`);
                     }
                 }
             }
@@ -443,7 +443,7 @@ export default class Bind extends Extension {
         const endpoints = utils.isEndpoint(target) ? [target] : target.members;
         const allBinds: zh.Bind[] = [];
 
-        for (const device of this.zigbee.devices(false)) {
+        for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
             for (const endpoint of device.zh.endpoints) {
                 for (const bind of endpoint.binds) {
                     allBinds.push(bind);
@@ -489,7 +489,7 @@ export default class Bind extends Extension {
                     await endpoint.configureReporting(cluster, items);
                     logger.info(`Successfully disabled reporting for '${entity}' cluster '${cluster}'`);
                 } catch (error) {
-                    logger.warning(`Failed to disable reporting for '${entity}' cluster '${cluster}'`);
+                    logger.warning(`Failed to disable reporting for '${entity}' cluster '${cluster}' (${error.message})`);
                 }
             }
 
@@ -555,7 +555,9 @@ export default class Bind extends Extension {
                             try {
                                 await endpoint.read(poll.read.cluster, readAttrs);
                             } catch (error) {
-                                logger.error(`Failed to poll ${readAttrs} from ${this.zigbee.resolveEntity(endpoint.getDevice()).name}`);
+                                logger.error(
+                                    `Failed to poll ${readAttrs} from ${this.zigbee.resolveEntity(endpoint.getDevice()).name} (${error.message})`,
+                                );
                             }
                         }, 1000);
                     }

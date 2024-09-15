@@ -60,7 +60,7 @@ async function getZigbee2MQTTVersion(includeCommitHash = true): Promise<{commitH
             if (err) {
                 try {
                     commitHash = fs.readFileSync(path.join(__dirname, '..', '..', 'dist', '.hash'), 'utf-8');
-                } catch (error) {
+                } catch {
                     /* istanbul ignore next */
                     commitHash = 'unknown';
                 }
@@ -90,6 +90,12 @@ function formatDate(time: number, type: 'ISO_8601' | 'ISO_8601_local' | 'epoch' 
         // relative
         return humanizeDuration(Date.now() - time, {language: 'en', largest: 2, round: true}) + ' ago';
     }
+}
+
+function objectIsEmpty(object: object): boolean {
+    // much faster than checking `Object.keys(object).length`
+    for (const k in object) return false;
+    return true;
 }
 
 function objectHasProperties(object: {[s: string]: unknown}, properties: string[]): boolean {
@@ -128,7 +134,7 @@ function getResponse(request: KeyValue | string, data: KeyValue, error: string):
 function parseJSON(value: string, fallback: string): KeyValue | string {
     try {
         return JSON.parse(value);
-    } catch (e) {
+    } catch {
         return fallback;
     }
 }
@@ -162,6 +168,7 @@ export function* loadExternalConverter(moduleName: string): Generator<ExternalDe
     if (moduleName.endsWith('.js')) {
         converter = loadModuleFromFile(data.joinPath(moduleName));
     } else {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         converter = require(moduleName);
     }
 
@@ -365,15 +372,15 @@ function filterProperties(filter: string[], data: KeyValue): void {
     }
 }
 
-export function isNumericExposeFeature(feature: zhc.Feature): feature is zhc.Numeric {
+export function isNumericExposeFeature(feature: zhc.Expose): feature is zhc.Numeric {
     return feature?.type === 'numeric';
 }
 
-export function isEnumExposeFeature(feature: zhc.Feature): feature is zhc.Enum {
+export function isEnumExposeFeature(feature: zhc.Expose): feature is zhc.Enum {
     return feature?.type === 'enum';
 }
 
-export function isBinaryExposeFeature(feature: zhc.Feature): feature is zhc.Binary {
+export function isBinaryExposeFeature(feature: zhc.Expose): feature is zhc.Binary {
     return feature?.type === 'binary';
 }
 
@@ -396,6 +403,10 @@ function getScenes(entity: zh.Endpoint | zh.Group): Scene[] {
     return Object.values(scenes);
 }
 
+function deviceNotCoordinator(device: zh.Device): boolean {
+    return device.type !== 'Coordinator';
+}
+
 /* istanbul ignore next */
 const noop = (): void => {};
 
@@ -404,6 +415,7 @@ export default {
     getZigbee2MQTTVersion,
     getDependencyVersion,
     formatDate,
+    objectIsEmpty,
     objectHasProperties,
     equalsPartial,
     getObjectProperty,
@@ -430,5 +442,6 @@ export default {
     flatten,
     arrayUnique,
     getScenes,
+    deviceNotCoordinator,
     noop,
 };

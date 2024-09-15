@@ -74,13 +74,13 @@ export default class Publish extends Extension {
         if (parsedTopic.attribute) {
             try {
                 return {[parsedTopic.attribute]: JSON.parse(data.message)};
-            } catch (e) {
+            } catch {
                 return {[parsedTopic.attribute]: data.message};
             }
         } else {
             try {
                 return JSON.parse(data.message);
-            } catch (e) {
+            } catch {
                 if (stateValues.includes(data.message.toLowerCase())) {
                     return {state: data.message};
                 } else {
@@ -229,7 +229,8 @@ export default class Publish extends Extension {
 
             if (!usedConverters.hasOwnProperty(endpointOrGroupID)) usedConverters[endpointOrGroupID] = [];
             /* istanbul ignore next */
-            const converter = converters.find((c) => c.key.includes(key) && (!c.endpoint || c.endpoint == endpointName));
+            // Match any key if the toZigbee converter defines no key.
+            const converter = converters.find((c) => (!c.key || c.key.includes(key)) && (!c.endpoint || c.endpoint == endpointName));
 
             if (parsedTopic.type === 'set' && usedConverters[endpointOrGroupID].includes(converter)) {
                 // Use a converter for set only once
@@ -317,12 +318,12 @@ export default class Publish extends Extension {
         }
 
         for (const [ID, payload] of Object.entries(toPublish)) {
-            if (Object.keys(payload).length != 0) {
+            if (!utils.objectIsEmpty(payload)) {
                 await this.publishEntityState(toPublishEntity[ID], payload);
             }
         }
 
-        const scenesChanged = Object.values(usedConverters).some((cl) => cl.some((c) => c.key.some((k) => sceneConverterKeys.includes(k))));
+        const scenesChanged = Object.values(usedConverters).some((cl) => cl.some((c) => c.key?.some((k) => sceneConverterKeys.includes(k))));
         if (scenesChanged) {
             this.eventBus.emitScenesChanged({entity: re});
         }

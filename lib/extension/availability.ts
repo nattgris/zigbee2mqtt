@@ -66,7 +66,9 @@ export default class Availability extends Extension {
 
     private removeFromPingQueue(device: Device): void {
         const index = this.pingQueue.findIndex((d) => d.ieeeAddr === device.ieeeAddr);
-        index != -1 && this.pingQueue.splice(index, 1);
+        if (index != -1) {
+            this.pingQueue.splice(index, 1);
+        }
     }
 
     private async pingQueueExecuteNext(): Promise<void> {
@@ -128,7 +130,7 @@ export default class Availability extends Extension {
             }
         });
 
-        this.eventBus.onDeviceRemoved(this, (data) => clearTimeout(this.timers[data.ieeeAddr]));
+        this.eventBus.onEntityRemoved(this, (data) => data.type == 'device' && clearTimeout(this.timers[data.id]));
         this.eventBus.onDeviceLeave(this, (data) => clearTimeout(this.timers[data.ieeeAddr]));
         this.eventBus.onDeviceAnnounce(this, (data) => this.retrieveState(data.device));
         this.eventBus.onLastSeenChanged(this, this.onLastSeenChanged);
@@ -138,7 +140,7 @@ export default class Availability extends Extension {
         await this.publishAvailabilityForAllEntities();
 
         // Start availability for the devices
-        for (const device of this.zigbee.devices(false)) {
+        for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
             if (utils.isAvailabilityEnabledForEntity(device, settings.get())) {
                 this.resetTimer(device);
 
@@ -151,7 +153,7 @@ export default class Availability extends Extension {
     }
 
     @bind private async publishAvailabilityForAllEntities(): Promise<void> {
-        for (const entity of [...this.zigbee.devices(false), ...this.zigbee.groups()]) {
+        for (const entity of this.zigbee.devicesAndGroupsIterator(utils.deviceNotCoordinator)) {
             if (utils.isAvailabilityEnabledForEntity(entity, settings.get())) {
                 await this.publishAvailability(entity, true, false, true);
             }
@@ -185,7 +187,7 @@ export default class Availability extends Extension {
         await this.mqtt.publish(topic, payload, {retain: true, qos: 1});
 
         if (!skipGroups && entity.isDevice()) {
-            for (const group of this.zigbee.groups()) {
+            for (const group of this.zigbee.groupsIterator()) {
                 if (group.hasMember(entity) && utils.isAvailabilityEnabledForEntity(group, settings.get())) {
                     await this.publishAvailability(group, false, forcePublish);
                 }
@@ -228,7 +230,7 @@ export default class Availability extends Extension {
                         continue;
                     }
 
-                    const converter = device.definition.toZigbee.find((c) => c.key.find((k) => item.keys.includes(k)));
+                    const converter = device.definition.toZigbee.find((c) => !c.key || c.key.find((k) => item.keys.includes(k)));
                     const options: KeyValue = device.options;
                     const state = this.state.get(device);
                     const meta: zhc.Tz.Meta = {

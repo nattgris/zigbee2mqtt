@@ -66,6 +66,7 @@ type ExtensionArgs = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let sdNotify: any = null;
 try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     sdNotify = process.env.NOTIFY_SOCKET ? require('sd-notify') : null;
 } catch {
     // sd-notify is optional
@@ -156,14 +157,18 @@ export class Controller {
         }
 
         // Log zigbee clients on startup
-        const devices = this.zigbee.devices(false);
-        logger.info(`Currently ${devices.length} devices are joined:`);
-        for (const device of devices) {
+        let deviceCount = 0;
+
+        for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
             const model = device.isSupported
                 ? `${device.definition.model} - ${device.definition.vendor} ${device.definition.description}`
                 : 'Not supported';
             logger.info(`${device.name} (${device.ieeeAddr}): ${model} (${device.zh.type})`);
+
+            deviceCount++;
         }
+
+        logger.info(`Currently ${deviceCount} devices are joined.`);
 
         // Enable zigbee join
         try {
@@ -175,14 +180,14 @@ export class Controller {
 
             await this.zigbee.permitJoin(settings.get().permit_join);
         } catch (error) {
-            logger.error(`Failed to set permit join to ${settings.get().permit_join}`);
+            logger.error(`Failed to set permit join to ${settings.get().permit_join} (${error.message})`);
         }
 
         // MQTT
         try {
             await this.mqtt.connect();
         } catch (error) {
-            logger.error(`MQTT failed to connect, exiting...`);
+            logger.error(`MQTT failed to connect, exiting... (${error.message})`);
             await this.zigbee.stop();
             return this.exit(1);
         }
@@ -192,7 +197,7 @@ export class Controller {
 
         // Send all cached states.
         if (settings.get().advanced.cache_state_send_on_startup && settings.get().advanced.cache_state) {
-            for (const entity of [...devices, ...this.zigbee.groups()]) {
+            for (const entity of this.zigbee.devicesAndGroupsIterator()) {
                 if (this.state.exists(entity)) {
                     await this.publishEntityState(entity, this.state.get(entity), 'publishCached');
                 }
@@ -247,7 +252,7 @@ export class Controller {
             await this.zigbee.stop();
             logger.info('Stopped Zigbee2MQTT');
         } catch (error) {
-            logger.error('Failed to stop Zigbee2MQTT');
+            logger.error(`Failed to stop Zigbee2MQTT (${error.message})`);
             code = 1;
         }
 

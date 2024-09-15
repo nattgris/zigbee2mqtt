@@ -16,7 +16,7 @@ function isValidUrl(url: string): boolean {
     let parsed;
     try {
         parsed = URI.parse(url);
-    } catch (_) {
+    } catch {
         // istanbul ignore next
         return false;
     }
@@ -65,10 +65,10 @@ export default class OTAUpdate extends Extension {
         // In order to support local firmware files we need to let zigbeeOTA know where the data directory is
         zhc.ota.setDataDir(dataDir.getPath());
 
-        // In case Zigbee2MQTT is restared during an update, progress and remaining values are still in state.
-        // remove them.
-        for (const device of this.zigbee.devices(false)) {
+        // In case Zigbee2MQTT is restared during an update, progress and remaining values are still in state, remove them.
+        for (const device of this.zigbee.devicesIterator(utils.deviceNotCoordinator)) {
             this.removeProgressAndRemainingFromState(device);
+
             // Reset update state, e.g. when Z2M restarted during update.
             if (this.state.get(device).update?.state === 'updating') {
                 this.state.get(device).update.state = 'available';
@@ -104,6 +104,7 @@ export default class OTAUpdate extends Extension {
             } catch (e) {
                 supportsOTA = false;
                 logger.debug(`Failed to check if update available for '${data.device.name}' (${e.message})`);
+                logger.debug(e.stack);
             }
 
             const payload = this.getEntityPublishPayload(data.device, availableResult ?? 'idle');
@@ -138,7 +139,7 @@ export default class OTAUpdate extends Extension {
             const endpoint = device.zh.endpoints.find((e) => e.supportsInputCluster('genBasic'));
             const result = await endpoint.read('genBasic', ['dateCode', 'swBuildId'], {sendPolicy});
             return {softwareBuildID: result.swBuildId, dateCode: result.dateCode};
-        } catch (e) {
+        } catch {
             return null;
         }
     }
@@ -319,7 +320,9 @@ export default class OTAUpdate extends Extension {
 
         if (error) {
             logger.error(error);
-            errorStack && logger.debug(errorStack);
+            if (errorStack) {
+                logger.debug(errorStack);
+            }
         }
     }
 }

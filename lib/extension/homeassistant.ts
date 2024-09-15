@@ -201,7 +201,7 @@ export default class HomeAssistant extends Extension {
         this.discoveryOrigin = {name: 'Zigbee2MQTT', sw: this.zigbee2MQTTVersion, url: 'https://www.zigbee2mqtt.io'};
         this.bridge = this.getBridgeEntity(await this.zigbee.getCoordinatorVersion());
         this.bridgeIdentifier = this.getDevicePayload(this.bridge).identifiers[0];
-        this.eventBus.onDeviceRemoved(this, this.onDeviceRemoved);
+        this.eventBus.onEntityRemoved(this, this.onEntityRemoved);
         this.eventBus.onMQTTMessage(this, this.onMQTTMessage);
         this.eventBus.onEntityRenamed(this, this.onEntityRenamed);
         this.eventBus.onPublishEntityState(this, this.onPublishEntityState);
@@ -225,7 +225,9 @@ export default class HomeAssistant extends Extension {
         const discoverWait = 5;
         // Discover with `published = false`, this will populate `this.discovered` without publishing the discoveries.
         // This is needed for clearing outdated entries in `this.onMQTTMessage()`
-        for (const e of [this.bridge, ...this.zigbee.devices(false), ...this.zigbee.groups()]) {
+        await this.discover(this.bridge, false);
+
+        for (const e of this.zigbee.devicesAndGroupsIterator(utils.deviceNotCoordinator)) {
             await this.discover(e, false);
         }
 
@@ -235,7 +237,9 @@ export default class HomeAssistant extends Extension {
             this.mqtt.unsubscribe(`${this.discoveryTopic}/#`);
             logger.debug(`Discovering entities to Home Assistant`);
 
-            for (const e of [this.bridge, ...this.zigbee.devices(false), ...this.zigbee.groups()]) {
+            await this.discover(this.bridge);
+
+            for (const e of this.zigbee.devicesAndGroupsIterator(utils.deviceNotCoordinator)) {
                 await this.discover(e);
             }
         }, utils.seconds(discoverWait));
@@ -244,8 +248,8 @@ export default class HomeAssistant extends Extension {
         this.eventBus.emitPublishAvailability();
     }
 
-    private getDiscovered(entity: Device | Group | Bridge | string): Discovered {
-        const ID = typeof entity === 'string' ? entity : entity.ID;
+    private getDiscovered(entity: Device | Group | Bridge | string | number): Discovered {
+        const ID = typeof entity === 'string' || typeof entity === 'number' ? entity : entity.ID;
         if (!(ID in this.discovered)) {
             this.discovered[ID] = {messages: {}, triggers: new Set(), mockProperties: new Set(), discovered: false};
         }
@@ -598,8 +602,8 @@ export default class HomeAssistant extends Extension {
 
             // If curtains do not have `running`, `motor_state` or `moving` properties.
             if (!discoveryEntry.discovery_payload.value_template) {
-                (discoveryEntry.discovery_payload.value_template = `{{ value_json.${featurePropertyWithoutEndpoint(state)} }}`),
-                    (discoveryEntry.discovery_payload.state_open = 'OPEN');
+                discoveryEntry.discovery_payload.value_template = `{{ value_json.${featurePropertyWithoutEndpoint(state)} }}`;
+                discoveryEntry.discovery_payload.state_open = 'OPEN';
                 discoveryEntry.discovery_payload.state_closed = 'CLOSE';
                 discoveryEntry.discovery_payload.state_stopped = 'STOP';
             }
@@ -811,7 +815,7 @@ export default class HomeAssistant extends Extension {
                 ballast_minimum_level: {entity_category: 'config'},
                 ballast_physical_maximum_level: {entity_category: 'diagnostic'},
                 ballast_physical_minimum_level: {entity_category: 'diagnostic'},
-                battery: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
+                battery: {device_class: 'battery', state_class: 'measurement'},
                 battery2: {device_class: 'battery', entity_category: 'diagnostic', state_class: 'measurement'},
                 battery_voltage: {device_class: 'voltage', entity_category: 'diagnostic', state_class: 'measurement', enabled_by_default: true},
                 boost_heating_countdown: {device_class: 'duration'},
@@ -1015,7 +1019,7 @@ export default class HomeAssistant extends Extension {
                 };
 
                 if (lookup[firstExpose.name]?.device_class === 'temperature') {
-                    discoveryEntry.discovery_payload.device_class == lookup[firstExpose.name]?.device_class;
+                    discoveryEntry.discovery_payload.device_class = lookup[firstExpose.name]?.device_class;
                 } else {
                     delete discoveryEntry.discovery_payload.device_class;
                 }
@@ -1177,6 +1181,14 @@ export default class HomeAssistant extends Extension {
             throw new Error(`Unsupported exposes type: '${firstExpose.type}'`);
         }
 
+        // Exposes with category 'config' or 'diagnostic' are always added to the respective category.
+        // This takes precedence over definitions in this file.
+        if (firstExpose.category === 'config') {
+            discoveryEntries.forEach((d) => (d.discovery_payload.entity_category = 'config'));
+        } else if (firstExpose.category === 'diagnostic') {
+            discoveryEntries.forEach((d) => (d.discovery_payload.entity_category = 'diagnostic'));
+        }
+
         discoveryEntries.forEach((d) => {
             // If a sensor has entity category `config`, then change
             // it to `diagnostic`. Sensors have no input, so can't be configured.
@@ -1196,15 +1208,15 @@ export default class HomeAssistant extends Extension {
         return discoveryEntries;
     }
 
-    @bind async onDeviceRemoved(data: eventdata.DeviceRemoved): Promise<void> {
+    @bind async onEntityRemoved(data: eventdata.EntityRemoved): Promise<void> {
         logger.debug(`Clearing Home Assistant discovery for '${data.name}'`);
-        const discovered = this.getDiscovered(data.ieeeAddr);
+        const discovered = this.getDiscovered(data.id);
 
         for (const topic of Object.keys(discovered.messages)) {
             await this.mqtt.publish(topic, null, {retain: true, qos: 1}, this.discoveryTopic, false, false);
         }
 
-        delete this.discovered[data.ieeeAddr];
+        delete this.discovered[data.id];
     }
 
     @bind async onGroupMembersChanged(data: eventdata.GroupMembersChanged): Promise<void> {
@@ -1710,7 +1722,7 @@ export default class HomeAssistant extends Extension {
                 if (!isDeviceAutomation && (!message.availability || !message.availability[0].topic.startsWith(baseTopic))) {
                     return;
                 }
-            } catch (e) {
+            } catch {
                 return;
             }
 
@@ -1745,7 +1757,7 @@ export default class HomeAssistant extends Extension {
         } else if ((data.topic === this.statusTopic || data.topic === defaultStatusTopic) && data.message.toLowerCase() === 'online') {
             const timer = setTimeout(async () => {
                 // Publish all device states.
-                for (const entity of [...this.zigbee.devices(false), ...this.zigbee.groups()]) {
+                for (const entity of this.zigbee.devicesAndGroupsIterator(utils.deviceNotCoordinator)) {
                     if (this.state.exists(entity)) {
                         await this.publishEntityState(entity, this.state.get(entity), 'publishCached');
                     }

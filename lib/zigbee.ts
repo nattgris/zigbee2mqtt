@@ -50,6 +50,7 @@ export default class Zigbee {
                 concurrent: settings.get().advanced.adapter_concurrent,
                 delay: settings.get().advanced.adapter_delay,
                 disableLED: settings.get().serial.disable_led,
+                transmitPower: settings.get().advanced.transmit_power,
             },
             acceptJoiningDeviceHandler: this.acceptJoiningDeviceHandler,
         };
@@ -66,7 +67,7 @@ export default class Zigbee {
             throw error;
         }
 
-        for (const device of this.devices(false)) {
+        for (const device of this.devicesIterator(utils.deviceNotCoordinator)) {
             await device.resolveDefinition();
         }
 
@@ -124,7 +125,7 @@ export default class Zigbee {
         logger.info(`Coordinator firmware version: '${stringify(await this.getCoordinatorVersion())}'`);
         logger.debug(`Zigbee network parameters: ${stringify(await this.herdsman.getNetworkParameters())}`);
 
-        for (const device of this.devices(false)) {
+        for (const device of this.devicesIterator(utils.deviceNotCoordinator)) {
             // If a passlist is used, all other device will be removed from the network.
             const passlist = settings.get().passlist;
             const blocklist = settings.get().blocklist;
@@ -135,22 +136,16 @@ export default class Zigbee {
                     logger.error(`Failed to remove '${device.ieeeAddr}' (${error.message})`);
                 }
             };
+
             if (passlist.length > 0) {
                 if (!passlist.includes(device.ieeeAddr)) {
-                    logger.warning(`Device which is not on passlist connected (${device.ieeeAddr}), removing...`);
+                    logger.warning(`Device not on passlist currently connected (${device.ieeeAddr}), removing...`);
                     await remove(device);
                 }
             } else if (blocklist.includes(device.ieeeAddr)) {
-                logger.warning(`Device on blocklist is connected (${device.ieeeAddr}), removing...`);
+                logger.warning(`Device on blocklist currently connected (${device.ieeeAddr}), removing...`);
                 await remove(device);
             }
-        }
-
-        // Check if we have to set a transmit power
-        if (settings.get().advanced.hasOwnProperty('transmit_power')) {
-            const transmitPower = settings.get().advanced.transmit_power;
-            await this.herdsman.setTransmitPower(transmitPower);
-            logger.info(`Set transmit power to '${transmitPower}'`);
         }
 
         return startResult;
@@ -253,7 +248,9 @@ export default class Zigbee {
     @bind private resolveDevice(ieeeAddr: string): Device {
         if (!this.deviceLookup[ieeeAddr]) {
             const device = this.herdsman.getDeviceByIeeeAddr(ieeeAddr);
-            device && (this.deviceLookup[ieeeAddr] = new Device(device));
+            if (device) {
+                this.deviceLookup[ieeeAddr] = new Device(device);
+            }
         }
 
         const device = this.deviceLookup[ieeeAddr];
@@ -325,20 +322,29 @@ export default class Zigbee {
         return this.herdsman.getDevicesByType('Coordinator')[0].endpoints[0];
     }
 
-    groups(): Group[] {
-        return this.herdsman.getGroups().map((g) => this.resolveGroup(g.groupID));
-    }
-
-    devices(includeCoordinator = true): Device[] {
-        const devices: Device[] = [];
-
-        for (const device of this.herdsman.getDevices()) {
-            if (includeCoordinator || device.type !== 'Coordinator') {
-                devices.push(this.resolveDevice(device.ieeeAddr));
-            }
+    *devicesAndGroupsIterator(
+        devicePredicate?: (value: zh.Device) => boolean,
+        groupPredicate?: (value: zh.Group) => boolean,
+    ): Generator<Device | Group> {
+        for (const device of this.herdsman.getDevicesIterator(devicePredicate)) {
+            yield this.resolveDevice(device.ieeeAddr);
         }
 
-        return devices;
+        for (const group of this.herdsman.getGroupsIterator(groupPredicate)) {
+            yield this.resolveGroup(group.groupID);
+        }
+    }
+
+    *groupsIterator(predicate?: (value: zh.Group) => boolean): Generator<Group> {
+        for (const group of this.herdsman.getGroupsIterator(predicate)) {
+            yield this.resolveGroup(group.groupID);
+        }
+    }
+
+    *devicesIterator(predicate?: (value: zh.Device) => boolean): Generator<Device> {
+        for (const device of this.herdsman.getDevicesIterator(predicate)) {
+            yield this.resolveDevice(device.ieeeAddr);
+        }
     }
 
     @bind private async acceptJoiningDeviceHandler(ieeeAddr: string): Promise<boolean> {

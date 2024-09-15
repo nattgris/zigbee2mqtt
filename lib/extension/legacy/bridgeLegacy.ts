@@ -61,7 +61,7 @@ export default class BridgeLegacy extends Extension {
         let json = null;
         try {
             json = JSON.parse(message);
-        } catch (e) {
+        } catch {
             logger.error('Failed to parse message as JSON');
             return;
         }
@@ -86,7 +86,7 @@ export default class BridgeLegacy extends Extension {
         try {
             await this.zigbee.reset('soft');
             logger.info('Soft reset ZNP');
-        } catch (error) {
+        } catch {
             logger.error('Soft reset failed');
         }
     }
@@ -127,7 +127,9 @@ export default class BridgeLegacy extends Extension {
 
     @bind async devices(topic: string): Promise<void> {
         const coordinator = await this.zigbee.getCoordinatorVersion();
-        const devices = this.zigbee.devices().map((device) => {
+        const devices: KeyValue[] = [];
+
+        for (const device of this.zigbee.devicesIterator()) {
             const payload: KeyValue = {
                 ieeeAddr: device.ieeeAddr,
                 type: device.zh.type,
@@ -155,8 +157,8 @@ export default class BridgeLegacy extends Extension {
                 payload.lastSeen = Date.now();
             }
 
-            return payload;
-        });
+            devices.push(payload);
+        }
 
         if (topic.split('/').pop() == 'get') {
             await this.mqtt.publish(`bridge/config/devices`, stringify(devices), {}, settings.get().mqtt.base_topic, false, false);
@@ -179,7 +181,7 @@ export default class BridgeLegacy extends Extension {
         let json = null;
         try {
             json = JSON.parse(message);
-        } catch (e) {
+        } catch {
             logger.error(invalid);
             return;
         }
@@ -213,7 +215,7 @@ export default class BridgeLegacy extends Extension {
             }
 
             await this.mqtt.publish('bridge/log', stringify({type: `${isGroup ? 'group' : 'device'}_renamed`, message: {from, to}}));
-        } catch (error) {
+        } catch {
             logger.error(`Failed to rename - ${from} to ${to}`);
         }
     }
@@ -231,7 +233,7 @@ export default class BridgeLegacy extends Extension {
             if (json.hasOwnProperty('friendly_name')) {
                 name = json.friendly_name;
             }
-        } catch (e) {
+        } catch {
             // just friendly_name
             name = message;
         }
@@ -295,7 +297,7 @@ export default class BridgeLegacy extends Extension {
 
         const cleanup = async (): Promise<void> => {
             // Fire event
-            this.eventBus.emitDeviceRemoved({ieeeAddr, name});
+            this.eventBus.emitEntityRemoved({id: ieeeAddr, name: name, type: 'device'});
 
             // Remove from configuration.yaml
             settings.removeDevice(entity.ieeeAddr);
